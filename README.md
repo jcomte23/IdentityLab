@@ -41,8 +41,36 @@ IdentityLab/
 
 2. Adjust the connection string in `src/IdentityLab.Mvc/appsettings.Development.json` to match your local PostgreSQL user and password.
 
-3. Run the MVC app:
+3. Apply the migrations (creates the `identitylab` database and its tables):
+
+   ```bash
+   dotnet ef database update --project src/IdentityLab.Mvc
+   ```
+
+4. Run the MVC app:
 
    ```bash
    dotnet run --project src/IdentityLab.Mvc
    ```
+
+## Database schema
+
+`ApplicationDbContext` inherits from `IdentityDbContext<ApplicationUser>`, which brings the Identity tables below. Migrations live in `src/IdentityLab.Mvc/Data/Migrations`.
+
+| Table | Primary key | Purpose |
+|---|---|---|
+| `AspNetUsers` | `Id` | Users (`ApplicationUser`): credentials, email, lockout and 2FA state, plus custom fields like `FullName` |
+| `AspNetRoles` | `Id` | Roles (e.g. `Admin`, `User`) |
+| `AspNetUserRoles` | `UserId` + `RoleId` | Many-to-many link between users and roles |
+| `AspNetUserClaims` | `Id` (identity) | Claims assigned directly to a user |
+| `AspNetRoleClaims` | `Id` (identity) | Claims assigned to a role, inherited by its users |
+| `AspNetUserLogins` | `LoginProvider` + `ProviderKey` | External logins (Google, Microsoft, ...) linked to a user |
+| `AspNetUserTokens` | `UserId` + `LoginProvider` + `Name` | Tokens stored for a user (e.g. 2FA authenticator key) |
+| `__EFMigrationsHistory` | `MigrationId` | Created by EF Core to track which migrations have been applied |
+
+Notes:
+
+- **User and role IDs are GUIDs stored as `text`**, not auto-incrementing numbers, so they can't be guessed and are generated without hitting the database.
+- **Foreign keys cascade on delete**: deleting a user also deletes their claims, role assignments, logins and tokens.
+- **Lookups use the `Normalized*` columns** (uppercase), so searches are case-insensitive.
+- **`UserName` is unique, `Email` is not** by default. Unique emails can be enabled with `options.User.RequireUniqueEmail = true`, which Identity validates in code, not the database.
