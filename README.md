@@ -19,6 +19,7 @@ IdentityLab/
 ├── src/
 │   ├── IdentityLab.Mvc/   # Stages 1 and 2: cookie-based auth
 │   └── IdentityLab.Api/   # Stage 3: JWT auth
+├── .env.example           # Environment variables template (copy to .env)
 ├── dotnet-tools.json      # Local tools (dotnet-ef)
 ├── IdentityLab.slnx
 └── README.md
@@ -41,13 +42,25 @@ IdentityLab/
 
 2. Adjust the connection string in `src/IdentityLab.Mvc/appsettings.Development.json` to match your local PostgreSQL user and password.
 
-3. Apply the migrations (creates the `identitylab` database and its tables):
+3. Configure the SMTP secrets with [User Secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets) (each developer uses their own account; for Gmail, `Smtp:Password` is an [app password](https://myaccount.google.com/apppasswords)):
+
+   ```bash
+   dotnet user-secrets set "Smtp:UserName" "<your-email>" --project src/IdentityLab.Mvc
+   dotnet user-secrets set "Smtp:Password" "<your-app-password>" --project src/IdentityLab.Mvc
+   dotnet user-secrets set "Smtp:FromAddress" "<your-email>" --project src/IdentityLab.Mvc
+   ```
+
+   Non-secret SMTP settings (`Host`, `Port`, `FromName`) live in `appsettings.json`.
+
+   For Docker, copy `.env.example` to `.env` and fill in the same values as environment variables (`SMTP__USERNAME`, `SMTP__PASSWORD`, `SMTP__FROMADDRESS`). In .NET, `__` maps to the `:` section separator and keys are case-insensitive.
+
+4. Apply the migrations (creates the `identitylab` database and its tables):
 
    ```bash
    dotnet ef database update --project src/IdentityLab.Mvc
    ```
 
-4. Run the MVC app:
+5. Run the MVC app:
 
    ```bash
    dotnet run --project src/IdentityLab.Mvc

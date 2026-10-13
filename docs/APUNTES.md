@@ -17,9 +17,10 @@ Notas del laboratorio **IdentityLab**: Identity agregado a mano en una app MVC c
 9. [Registro de usuarios](#9-registro-de-usuarios)
 10. [Vistas y tag helpers](#10-vistas-y-tag-helpers)
 11. [Login](#11-login)
-12. [Git y commits](#12-git-y-commits)
-13. [Comandos útiles](#13-comandos-útiles)
-14. [Pendientes](#14-pendientes)
+12. [Configuración, secretos y variables de entorno](#12-configuración-secretos-y-variables-de-entorno)
+13. [Git y commits](#13-git-y-commits)
+14. [Comandos útiles](#14-comandos-útiles)
+15. [Pendientes](#15-pendientes)
 
 ---
 
@@ -89,7 +90,7 @@ En `appsettings.Development.json`:
 
 **Orden de carga de la configuración:** primero `appsettings.json` y luego `appsettings.{Environment}.json`, que sobrescribe al anterior. El entorno `Development` viene de `launchSettings.json`.
 
-**User Secrets** (`dotnet user-secrets`) es la forma de guardar secretos fuera del repositorio. En este laboratorio no se usa por ahora, porque la contraseña es solo local.
+La contraseña de PostgreSQL se dejó en `appsettings.Development.json` porque es solo local. Los secretos que sí importan (SMTP) van en User Secrets: ver la [sección 12](#12-configuración-secretos-y-variables-de-entorno).
 
 ---
 
@@ -466,7 +467,109 @@ URL ?returnUrl=... → GET Login(returnUrl) → ViewData["ReturnUrl"]
 
 ---
 
-## 12. Git y commits
+## 12. Configuración, secretos y variables de entorno
+
+### Fuentes de configuración
+
+El código nunca pregunta de qué archivo viene un valor: pide una clave (`Smtp:Password`) y .NET la busca en varias fuentes. **Cada fuente sobrescribe solo las claves que define**, en este orden:
+
+```
+appsettings.json                   → siempre
+appsettings.{Environment}.json     → solo en ese entorno
+User Secrets                       → solo en Development
+Variables de entorno               → siempre, de forma nativa
+```
+
+El entorno lo define **`ASPNETCORE_ENVIRONMENT`**. En local vale `Development` (por `launchSettings.json`). **Si no está definida, .NET asume `Production`**, y entonces no carga ni `appsettings.Development.json` ni User Secrets.
+
+### Dónde va cada dato
+
+| Tipo de dato | Dónde | Ejemplo |
+|---|---|---|
+| Igual en todos los entornos | `appsettings.json` | `Smtp:Host`, `Smtp:Port`, `Smtp:FromName` |
+| Cambia según el entorno | `appsettings.{Entorno}.json` | Cadena de conexión local |
+| Secreto o dato personal (desarrollo) | User Secrets | `Smtp:Password`, `Smtp:UserName`, `Smtp:FromAddress` |
+| Secreto (Docker o producción) | Variables de entorno | `SMTP__PASSWORD` |
+
+⚠️ Si una sección solo está en `appsettings.Development.json`, **no existirá en producción**.
+
+### Secciones y la sintaxis `:`
+
+El `:` crea una **jerarquía**: `Smtp:Password` es la propiedad `Password` dentro de la sección `Smtp`. Agrupar las claves en secciones permite mapear la sección entera a una clase C#.
+
+```json
+"Smtp": {
+  "Host": "smtp.gmail.com",
+  "Port": 587,
+  "FromName": "IdentityLab"
+}
+```
+
+- En JSON, **el último elemento de un objeto no lleva coma**. El lector de .NET tolera la coma final, pero otras herramientas no.
+
+### User Secrets
+
+Es la herramienta **propia de .NET** (viene con el SDK) para guardar secretos de desarrollo **fuera de la carpeta del proyecto**.
+
+```bash
+dotnet user-secrets init --project src/IdentityLab.Mvc                     # una sola vez
+dotnet user-secrets set "Smtp:Password" "valor" --project src/IdentityLab.Mvc
+dotnet user-secrets list --project src/IdentityLab.Mvc
+dotnet user-secrets remove "Smtp:Password" --project src/IdentityLab.Mvc
+```
+
+- `init` agrega `<UserSecretsId>` al `.csproj`. **Es solo un identificador, no un secreto**: se sube a Git.
+- Los valores se guardan en `~/.microsoft/usersecrets/<UserSecretsId>/secrets.json`.
+- En Rider: clic derecho en el proyecto → **Tools → .NET User Secrets**. Hace el `init` y abre el `secrets.json`.
+- `CreateBuilder` los carga automáticamente, **solo en `Development`**.
+- **No están cifrados**: la protección consiste en que están fuera del repo.
+- El `secrets.json` acepta formato plano (`"Smtp:Password": "..."`) o anidado (`"Smtp": { "Password": "..." }`). Son equivalentes.
+
+### Compartir secretos con el equipo
+
+User Secrets **no se comparte, a propósito**. De la mejor a la peor opción:
+
+1. **Cada desarrollador usa sus propias credenciales.** En el README se documentan los **nombres** de las claves, nunca los valores.
+2. **Si la credencial debe ser compartida**, se pasa con un **gestor de contraseñas** de equipo (Bitwarden, 1Password). ❌ Nunca por chat, correo ni en el repo.
+3. **Gestor de secretos centralizado** (Azure Key Vault, AWS Secrets Manager, Doppler, Infisical). Útil en equipos grandes y en producción.
+4. **Que en desarrollo no haga falta el secreto**, por ejemplo con un SMTP falso como Mailpit.
+
+### Archivos `.env`
+
+- .NET **no lee `.env` por sí solo**. Lo lee **`docker compose`**, que convierte cada línea en una variable de entorno del contenedor, y .NET lee esas variables de forma nativa.
+- Van en la **raíz de la solución**, junto al futuro `docker-compose.yml`, porque compose los busca en su misma carpeta.
+- **`.env`**: valores reales. Está en `.gitignore` y **no se sube**.
+- **`.env.example`**: mismos nombres, sin valores reales. **Sí se sube**, para que el equipo sepa qué llenar.
+- Formato: `NOMBRE=valor`, una por línea, **sin espacios** alrededor del `=` y sin comillas (salvo que el valor tenga espacios).
+
+```
+SMTP__USERNAME=
+SMTP__PASSWORD=
+SMTP__FROMADDRESS=
+```
+
+### Nombres de variables de entorno en .NET
+
+1. **El `:` se escribe como doble guion bajo `__`.** El `__` no es estilo: es sintaxis y significa "entrar en una sección".
+2. **Las claves no distinguen mayúsculas de minúsculas.** `Smtp__Password`, `SMTP__PASSWORD` y `smtp__password` son la misma clave. Por eso se puede seguir la convención clásica en MAYÚSCULAS.
+3. **Un guion bajo simple es parte del nombre.** No separa palabras ni crea secciones.
+
+| Variable | ¿Llega a `Smtp:FromAddress`? |
+|---|---|
+| `Smtp__FromAddress` | ✅ |
+| `SMTP__FROMADDRESS` | ✅ Las mayúsculas no importan |
+| `SMTP__FROM_ADDRESS` | ❌ Busca una propiedad `FROM_ADDRESS` |
+| `SMTP_FROMADDRESS` | ❌ Un solo `_` no crea sección |
+
+⚠️ Un nombre mal escrito **no da error**: el valor simplemente se ignora.
+
+### Producción
+
+"Producción" es el entorno donde la app corre para los usuarios reales, sea en Azure, otra nube, un VPS o un servidor interno. Allí no hay User Secrets: los secretos se configuran como **variables de entorno**, por ejemplo en la sección de configuración de Azure App Service. **El código no cambia.**
+
+---
+
+## 13. Git y commits
 
 ### Conventional Commits
 
@@ -474,6 +577,7 @@ URL ?returnUrl=... → GET Login(returnUrl) → ViewData["ReturnUrl"]
 |---|---|
 | `chore:` | Preparar el entorno: plantilla, paquetes, configuración |
 | `feat:` | Funcionalidad o código propio del proyecto |
+| `docs:` | Cambios que solo afectan a la documentación |
 
 - **Primera línea**: corta (unos 50 caracteres), en imperativo ("add", no "added").
 - **Cuerpo**: lista de qué incluye el commit.
@@ -495,10 +599,12 @@ URL ?returnUrl=... → GET Login(returnUrl) → ViewData["ReturnUrl"]
 4. `feat: register DbContext and Identity services`
 5. `feat: add initial Identity migration`
 6. `feat: add user registration`
+7. `feat: add user login`
+8. `feat: add logout and fix login returnUrl`
 
 ---
 
-## 13. Comandos útiles
+## 14. Comandos útiles
 
 ```bash
 # Paquetes
@@ -514,6 +620,10 @@ dotnet ef migrations add <Nombre> --project src/IdentityLab.Mvc --output-dir Dat
 dotnet ef migrations script --project src/IdentityLab.Mvc
 dotnet ef database update --project src/IdentityLab.Mvc
 
+# User Secrets
+dotnet user-secrets set "<Seccion:Clave>" "<valor>" --project src/IdentityLab.Mvc
+dotnet user-secrets list --project src/IdentityLab.Mvc
+
 # Compilar y ejecutar
 dotnet build
 dotnet run --project src/IdentityLab.Mvc
@@ -523,12 +633,15 @@ dotnet run --project src/IdentityLab.Mvc
 
 ---
 
-## 14. Pendientes
+## 15. Pendientes
 
-- [ ] Corregir `GET Login` para que reciba `returnUrl` y lo guarde en `ViewData`.
-- [ ] **Logout**: acción `POST` con `SignOutAsync()`.
-- [ ] (Opcional) Mostrar en el navbar si hay sesión iniciada (`_LoginPartial`, `@inject SignInManager`).
+- [x] Corregir `GET Login` para que reciba `returnUrl` y lo guarde en `ViewData`.
+- [x] **Logout**: acción `POST` con `SignOutAsync()`.
+- [x] Mostrar en el navbar si hay sesión iniciada (directamente en `_Layout.cshtml`, con `User.Identity?.IsAuthenticated`).
+- [ ] **Confirmación de correo** (en curso): SMTP con Gmail, MailKit, `IEmailSender`, token de confirmación y `RequireConfirmedAccount`.
 - [ ] Ajustar las opciones de Identity: reglas de contraseña y `RequireUniqueEmail`.
 - [ ] `ConfigureApplicationCookie`, después de `AddIdentity`.
 - [ ] Proteger páginas con `[Authorize]`.
 - [ ] Etapa 3: `IdentityLab.Api` con `AddIdentityCore` + JWT.
+- [x] Crear `.env` y `.env.example` en la raíz.
+- [ ] Dockerizar: `Dockerfile` y `docker-compose.yml` que lean el `.env`.
