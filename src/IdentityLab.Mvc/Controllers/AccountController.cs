@@ -54,8 +54,9 @@ public class AccountController : Controller
     }
     
     [HttpGet]
-    public IActionResult Login()
+    public IActionResult Login(string? returnUrl = null)
     {
+        ViewData["ReturnUrl"] = returnUrl;
         return View();
     }
     
@@ -92,4 +93,13 @@ public class AccountController : Controller
         ModelState.AddModelError(string.Empty, "Invalid login attempt.");
         return View(model);
     }
+    
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Logout()
+    {
+        await _signInManager.SignOutAsync();
+        return RedirectToAction("Index", "Home");
+    }
+
 }
