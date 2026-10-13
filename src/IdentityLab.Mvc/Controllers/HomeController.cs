@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using IdentityLab.Mvc.Models;
+using IdentityLab.Mvc.Services;
 
 namespace IdentityLab.Mvc.Controllers;
 
