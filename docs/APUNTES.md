@@ -19,9 +19,10 @@ Notas del laboratorio **IdentityLab**: Identity agregado a mano en una app MVC c
 11. [Login](#11-login)
 12. [Configuración, secretos y variables de entorno](#12-configuración-secretos-y-variables-de-entorno)
 13. [Confirmación de correo](#13-confirmación-de-correo)
-14. [Git y commits](#14-git-y-commits)
-15. [Comandos útiles](#15-comandos-útiles)
-16. [Pendientes](#16-pendientes)
+14. [Recuperación de contraseña](#14-recuperación-de-contraseña)
+15. [Git y commits](#15-git-y-commits)
+16. [Comandos útiles](#16-comandos-útiles)
+17. [Pendientes](#17-pendientes)
 
 ---
 
@@ -893,7 +894,127 @@ El mensaje de `IsLockedOut` tiene el mismo problema. Es un compromiso que muchas
 
 ---
 
-## 14. Git y commits
+## 14. Recuperación de contraseña
+
+Reutiliza **toda la infraestructura de correo** de la sección 13. Solo cambian el tipo de token y los formularios.
+
+### El flujo
+
+```
+1. Login → "Forgot your password?"
+2. GET  ForgotPassword  → formulario con el email
+3. POST ForgotPassword  → si existe y confirmó: token + enlace + correo
+                        → SIEMPRE redirige a ForgotPasswordConfirmation
+4. GET  ResetPassword?code=...  → formulario: email + contraseña nueva + Code oculto
+5. POST ResetPassword   → ResetPasswordAsync(user, token, newPassword)
+                        → ResetPasswordConfirmation → Login
+```
+
+### Piezas
+
+| Pieza | Qué es |
+|---|---|
+| `ForgotPasswordViewModel` | Solo `Email` |
+| `ResetPasswordViewModel` | `Email`, `Password`, `ConfirmPassword` y **`Code`** |
+| `ForgotPassword` (GET/POST) | Pedir el enlace |
+| `ForgotPasswordConfirmation` | "If an account with that email exists, we've sent you a link…" |
+| `ResetPassword` (GET/POST) | Poner la contraseña nueva |
+| `ResetPasswordConfirmation` | "Your password has been reset." + enlace a Login |
+
+### `POST ForgotPassword`
+
+```csharp
+var user = await _userManager.FindByEmailAsync(model.Email);
+if (user is null || !await _userManager.IsEmailConfirmedAsync(user))
+{
+    return RedirectToAction("ForgotPasswordConfirmation");   // sin correo
+}
+
+var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+// Base64UrlEncode + Url.Action("ResetPassword", ..., new { code }, Request.Scheme) ?? throw
+// + SendEmailAsync con HtmlEncoder (igual que en la confirmación)
+
+return RedirectToAction("ForgotPasswordConfirmation");       // con correo
+```
+
+- **Las dos salidas llevan a la misma página**: exista o no la cuenta, la respuesta es idéntica. Por eso la vista `ForgotPassword` **no tiene `asp-validation-summary`**: nunca hay errores del servidor que mostrar.
+- **Solo se envía a correos confirmados**: direcciones que el usuario ya demostró que son suyas.
+- **El enlace solo lleva `code`**, no el `userId`. El email se pide en el formulario, así que la URL no expone datos del usuario.
+- Mientras `ResetPassword` no existía, `Url.Action` devolvía `null` y saltaba el `?? throw`. **Para eso está.**
+- ⚠️ **Fuga por tiempo**: si la cuenta existe, la respuesta tarda más (se conecta a Gmail). En apps reales se envían los correos **en segundo plano**, con una cola.
+
+### `GET ResetPassword`
+
+```csharp
+public IActionResult ResetPassword(string? code)
+{
+    if (code is null) return BadRequest("A code must be supplied for password reset.");
+    return View(new ResetPasswordViewModel { Code = code });
+}
+```
+
+- **`BadRequest`** devuelve un **400** (petición mal formada).
+- Se pasa un **modelo ya relleno** a un formulario vacío, para guardar el `Code` en la página.
+- En la vista, **`<input asp-for="Code" type="hidden" />`** lleva el token hasta el `POST`. Es la misma idea que el `returnUrl`: cada petición empieza de cero.
+
+```
+Enlace ?code=...  →  GET: Code en el modelo  →  <input hidden>  →  POST: model.Code
+```
+
+### `POST ResetPassword`
+
+```csharp
+var user = await _userManager.FindByEmailAsync(model.Email);
+if (user is null)
+{
+    ModelState.AddModelError(string.Empty, _userManager.ErrorDescriber.InvalidToken().Description);
+    return View(model);
+}
+
+var token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(model.Code));
+var result = await _userManager.ResetPasswordAsync(user, token, model.Password);
+
+if (result.Succeeded) return RedirectToAction("ResetPasswordConfirmation");
+
+foreach (var error in result.Errors) ModelState.AddModelError(string.Empty, error.Description);
+return View(model);
+```
+
+**`ResetPasswordAsync`, en orden:**
+1. Valida el token (firma, usuario, propósito, caducidad y `SecurityStamp`). Si falla: **"Invalid token."**
+2. Valida la contraseña nueva con las reglas de Identity.
+3. Hashea y guarda la contraseña.
+4. **Cambia el `SecurityStamp`**, y con ello:
+   - **El enlace solo funciona una vez**, porque el token contenía el stamp viejo.
+   - **Se invalidan las sesiones en otros dispositivos.** Identity revisa el stamp de la cookie cada 30 minutos por defecto.
+
+**El caso `user is null` y la regla de la misma respuesta:**
+
+Muchos ejemplos (incluida la plantilla de Microsoft) redirigen a la página de éxito cuando el usuario no existe. Pero eso filtra información:
+
+| Prueba del atacante | Redirigir a éxito | Nuestra versión |
+|---|---|---|
+| Email que **no existe** + código inventado | "Contraseña cambiada" | "Invalid token." |
+| Email que **existe** + código inventado | "Invalid token." | "Invalid token." |
+
+- **`_userManager.ErrorDescriber.InvalidToken().Description`** usa el **mismo texto** que Identity, en lugar de escribirlo a mano. Si Identity lo cambia o lo traduces, los dos casos siguen siendo idénticos.
+- **Los errores de las reglas de contraseña no filtran nada**: solo aparecen si el token ya era válido (el paso 1 va antes que el 2). Por eso esta vista **sí tiene `asp-validation-summary`**.
+
+### Cómo probarlo
+
+| # | Prueba | Resultado esperado |
+|---|---|---|
+| 1 | Pedir el reset, abrir el enlace y poner una contraseña válida | "Your password has been reset." |
+| 2 | Iniciar sesión con la contraseña vieja | ❌ |
+| 3 | Iniciar sesión con la nueva | ✅ |
+| 4 | Reutilizar el mismo enlace | "Invalid token." (solo sirve una vez) |
+| 5 | Enlace nuevo con contraseña débil | Errores de las reglas de contraseña |
+| 6 | Enlace nuevo con **otro** email | "Invalid token." |
+| 7 | Pedir el reset con un email que no existe | La misma página "Check your email" |
+
+---
+
+## 15. Git y commits
 
 ### Conventional Commits
 
@@ -928,10 +1049,12 @@ El mensaje de `IsLockedOut` tiene el mismo problema. Es un compromiso que muchas
 9. `chore: configure SMTP settings and secrets`
 10. `feat: add SMTP email sender with MailKit`
 11. `feat: add email confirmation`
+12. `docs: add email confirmation notes`
+13. `feat: add password reset`
 
 ---
 
-## 15. Comandos útiles
+## 16. Comandos útiles
 
 ```bash
 # Paquetes
@@ -960,7 +1083,7 @@ dotnet run --project src/IdentityLab.Mvc
 
 ---
 
-## 16. Pendientes
+## 17. Pendientes
 
 - [x] Corregir `GET Login` para que reciba `returnUrl` y lo guarde en `ViewData`.
 - [x] **Logout**: acción `POST` con `SignOutAsync()`.
@@ -969,7 +1092,8 @@ dotnet run --project src/IdentityLab.Mvc
 - [ ] Resolver los usuarios antiguos con `EmailConfirmed = false` (ya no pueden iniciar sesión).
 - [ ] (Opcional) Reenviar el correo de confirmación.
 - [ ] (Opcional) Manejar un `code` que no sea Base64Url válido en `ConfirmEmail`.
-- [ ] Reset de contraseña (reutiliza `IEmailSender`, con `GeneratePasswordResetTokenAsync`).
+- [x] Reset de contraseña (reutiliza `IEmailSender`, con `GeneratePasswordResetTokenAsync`).
+- [ ] (Opcional) Enviar los correos en segundo plano, para evitar la fuga por tiempo de respuesta.
 - [ ] Ajustar las opciones de Identity: reglas de contraseña y `RequireUniqueEmail`.
 - [ ] `ConfigureApplicationCookie`, después de `AddIdentity`.
 - [ ] Proteger páginas con `[Authorize]`.

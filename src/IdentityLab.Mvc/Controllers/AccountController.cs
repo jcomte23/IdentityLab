@@ -147,4 +147,100 @@ public class AccountController : Controller
     {
         return View();
     }
+    
+    [HttpGet]
+    public IActionResult ForgotPassword()
+    {
+        return View();
+    }
+    
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var user = await _userManager.FindByEmailAsync(model.Email);
+        if (user is null || !await _userManager.IsEmailConfirmedAsync(user))
+        {
+            return RedirectToAction("ForgotPasswordConfirmation");
+        }
+
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+        var resetLink = Url.Action(
+                            "ResetPassword",
+                            "Account",
+                            new { code = encodedToken },
+                            Request.Scheme)
+                        ?? throw new InvalidOperationException("Could not generate the password reset link.");
+
+        await _emailSender.SendEmailAsync(
+            model.Email,
+            "Reset your password",
+            $"<p>You can reset your password by <a href=\"{HtmlEncoder.Default.Encode(resetLink)}\">clicking here</a>.</p>" +
+            "<p>If you didn't request this, you can ignore this email.</p>");
+
+        return RedirectToAction("ForgotPasswordConfirmation");
+    }
+    
+    [HttpGet]
+    public IActionResult ForgotPasswordConfirmation()
+    {
+        return View();
+    }
+    
+    [HttpGet]
+    public IActionResult ResetPassword(string? code)
+    {
+        if (code is null)
+        {
+            return BadRequest("A code must be supplied for password reset.");
+        }
+
+        return View(new ResetPasswordViewModel { Code = code });
+    }
+    
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var user = await _userManager.FindByEmailAsync(model.Email);
+        if (user is null)
+        {
+            ModelState.AddModelError(string.Empty, _userManager.ErrorDescriber.InvalidToken().Description);
+            return View(model);
+        }
+
+        var token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(model.Code));
+        var result = await _userManager.ResetPasswordAsync(user, token, model.Password);
+
+        if (result.Succeeded)
+        {
+            return RedirectToAction("ResetPasswordConfirmation");
+        }
+
+        foreach (var error in result.Errors)
+        {
+            ModelState.AddModelError(string.Empty, error.Description);
+        }
+
+        return View(model);
+    }
+    
+    [HttpGet]
+    public IActionResult ResetPasswordConfirmation()
+    {
+        return View();
+    }
+    
+    
 }
