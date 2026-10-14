@@ -10,6 +10,7 @@ public class RegisterViewModel
 
     [Required]
     [StringLength(50, MinimumLength = 3)]
+    [RegularExpression(@"^[a-zA-Z0-9._-]+$", ErrorMessage = "Username can only contain letters, numbers, dots, underscores and hyphens.")]
     [Display(Name = "Username")]
     public string UserName { get; set; } = string.Empty;
 

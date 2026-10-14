@@ -5,8 +5,8 @@ namespace IdentityLab.Mvc.Models;
 public class LoginViewModel
 {
     [Required]
-    [EmailAddress]
-    public string Email { get; set; } = string.Empty;
+    [Display(Name = "Email or username")]
+    public string EmailOrUserName { get; set; } = string.Empty;
 
     [Required]
     [DataType(DataType.Password)]

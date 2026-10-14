@@ -131,7 +131,7 @@ public class AccountController : Controller
         if (await _userManager.FindByEmailAsync(email) is not null)
         {
             ModelState.AddModelError(string.Empty, "An account with this email already exists. Log in with your password.");
-            return View("Login", new LoginViewModel { Email = email });
+            return View("Login", new LoginViewModel { EmailOrUserName = email });
         }
 
         var user = new ApplicationUser(
@@ -212,10 +212,20 @@ public class AccountController : Controller
         {
             return View(model);
         }
-        
+
+        var user = model.EmailOrUserName.Contains('@')
+            ? await _userManager.FindByEmailAsync(model.EmailOrUserName)
+            : await _userManager.FindByNameAsync(model.EmailOrUserName);
+
+        if (user is null)
+        {
+            ModelState.AddModelError(string.Empty, "Invalid login attempt. If you just registered, make sure you have confirmed your email.");
+            return View(model);
+        }
 
         var result = await _signInManager.PasswordSignInAsync(
-            model.Email, model.Password, model.RememberMe, lockoutOnFailure: true);
+            user, model.Password, model.RememberMe, lockoutOnFailure: true);
+
         if (result.Succeeded)
         {
             if (Url.IsLocalUrl(returnUrl))
