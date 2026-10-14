@@ -11,12 +11,19 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString));
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
+
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+    {
+        options.SignIn.RequireConfirmedEmail = true;
+    })
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
+
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("Smtp"));
+
 builder.Services.AddTransient<IEmailSender, SmtpEmailSender>();
 
 var app = builder.Build();

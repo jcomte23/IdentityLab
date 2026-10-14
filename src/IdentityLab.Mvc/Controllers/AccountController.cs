@@ -1,6 +1,10 @@
+using System.Text;
+using System.Text.Encodings.Web;
 using IdentityLab.Mvc.Models;
+using IdentityLab.Mvc.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace IdentityLab.Mvc.Controllers;
 
@@ -8,19 +12,22 @@ public class AccountController : Controller
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
+    private readonly IEmailSender _emailSender;
 
-    public AccountController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager)
+    public AccountController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager,
+        IEmailSender emailSender)
     {
         _userManager = userManager;
         _signInManager = signInManager;
+        _emailSender = emailSender;
     }
-    
+
     [HttpGet]
     public IActionResult Register()
     {
         return View();
     }
-    
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Register(RegisterViewModel model)
@@ -41,8 +48,21 @@ public class AccountController : Controller
 
         if (result.Succeeded)
         {
-            await _signInManager.SignInAsync(user, isPersistent: false);
-            return RedirectToAction("Index", "Home");
+            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+            var confirmationLink = Url.Action(
+                "ConfirmEmail",
+                "Account",
+                new { userId = user.Id, code = encodedToken },
+                Request.Scheme) ?? throw new InvalidOperationException("Could not generate the email confirmation link.");
+
+
+            await _emailSender.SendEmailAsync(
+                model.Email,
+                "Confirm your email",
+                $"<p>Please confirm your account by <a href=\"{HtmlEncoder.Default.Encode(confirmationLink)}\">clicking here</a>.</p>");
+            
+            return RedirectToAction("RegisterConfirmation");
         }
 
         foreach (var error in result.Errors)
@@ -52,14 +72,14 @@ public class AccountController : Controller
 
         return View(model);
     }
-    
+
     [HttpGet]
     public IActionResult Login(string? returnUrl = null)
     {
         ViewData["ReturnUrl"] = returnUrl;
         return View();
     }
-    
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl = null)
@@ -70,10 +90,10 @@ public class AccountController : Controller
         {
             return View(model);
         }
+        
 
         var result = await _signInManager.PasswordSignInAsync(
             model.Email, model.Password, model.RememberMe, lockoutOnFailure: true);
-
         if (result.Succeeded)
         {
             if (Url.IsLocalUrl(returnUrl))
@@ -90,10 +110,10 @@ public class AccountController : Controller
             return View(model);
         }
 
-        ModelState.AddModelError(string.Empty, "Invalid login attempt.");
+        ModelState.AddModelError(string.Empty, "Invalid login attempt. If you just registered, make sure you have confirmed your email.");
         return View(model);
     }
-    
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Logout()
@@ -102,4 +122,29 @@ public class AccountController : Controller
         return RedirectToAction("Index", "Home");
     }
 
+    [HttpGet]
+    public async Task<IActionResult> ConfirmEmail(string? userId, string? code)
+    {
+        if (userId is null || code is null)
+        {
+            return View(false);
+        }
+
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user is null)
+        {
+            return View(false);
+        }
+
+        var token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(code));
+        var result = await _userManager.ConfirmEmailAsync(user, token);
+
+        return View(result.Succeeded);
+    }
+    
+    [HttpGet]
+    public IActionResult RegisterConfirmation()
+    {
+        return View();
+    }
 }
