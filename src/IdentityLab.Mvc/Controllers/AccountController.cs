@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using System.Text.Encodings.Web;
 using IdentityLab.Mvc.Models;
@@ -81,6 +82,118 @@ public class AccountController : Controller
     /*---------------------------------*/
     /*Login de un usuario en el sistema*/
     /*---------------------------------*/
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult ExternalLogin(string provider, string? returnUrl = null)
+    {
+        var redirectUrl = Url.Action("ExternalLoginCallback", "Account", new { returnUrl });
+        var properties = _signInManager.ConfigureExternalAuthenticationProperties(provider, redirectUrl);
+        return Challenge(properties, provider);
+    }
+    
+    [HttpGet]
+    public async Task<IActionResult> ExternalLoginCallback(string? returnUrl = null)
+    {
+        ViewData["ReturnUrl"] = returnUrl;
+
+        var info = await _signInManager.GetExternalLoginInfoAsync();
+        if (info is null)
+        {
+            ModelState.AddModelError(string.Empty, "Error loading external login information.");
+            return View("Login", new LoginViewModel());
+        }
+
+        var result = await _signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey, isPersistent: false, bypassTwoFactor: true);
+
+        if (result.Succeeded)
+        {
+            if (Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+
+            return RedirectToAction("Index", "Home");
+        }
+
+        if (result.IsLockedOut || result.IsNotAllowed)
+        {
+            ModelState.AddModelError(string.Empty, "You can't log in with this account right now.");
+            return View("Login", new LoginViewModel());
+        }
+
+        var email = info.Principal.FindFirstValue(ClaimTypes.Email);
+        if (email is null)
+        {
+            ModelState.AddModelError(string.Empty, $"{info.LoginProvider} didn't share your email address.");
+            return View("Login", new LoginViewModel());
+        }
+
+        if (await _userManager.FindByEmailAsync(email) is not null)
+        {
+            ModelState.AddModelError(string.Empty, "An account with this email already exists. Log in with your password.");
+            return View("Login", new LoginViewModel { Email = email });
+        }
+
+        var user = new ApplicationUser(
+            fullName: info.Principal.FindFirstValue(ClaimTypes.Name),
+            userName: await GenerateUniqueUserNameAsync(email),
+            email: email)
+        {
+            EmailConfirmed = true
+        };
+
+        var createResult = await _userManager.CreateAsync(user);
+        if (createResult.Succeeded)
+        {
+            var loginResult = await _userManager.AddLoginAsync(user, info);
+            if (loginResult.Succeeded)
+            {
+                await _signInManager.ExternalLoginSignInAsync(
+                    info.LoginProvider, info.ProviderKey, isPersistent: false, bypassTwoFactor: true);
+
+                if (Url.IsLocalUrl(returnUrl))
+                {
+                    return Redirect(returnUrl);
+                }
+
+                return RedirectToAction("Index", "Home");
+            }
+
+            await _userManager.DeleteAsync(user);
+            createResult = loginResult;
+        }
+
+        foreach (var error in createResult.Errors)
+        {
+            ModelState.AddModelError(string.Empty, error.Description);
+        }
+
+        return View("Login", new LoginViewModel());
+    }
+    
+    private async Task<string> GenerateUniqueUserNameAsync(string email)
+    {
+        var localPart = email.Split('@')[0];
+        var baseName = new string(localPart
+            .Where(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-')
+            .ToArray());
+
+        if (baseName.Length < 3)
+        {
+            baseName = "user" + baseName;
+        }
+
+        var userName = baseName;
+        var suffix = 1;
+        while (await _userManager.FindByNameAsync(userName) is not null)
+        {
+            userName = $"{baseName}{suffix}";
+            suffix++;
+        }
+
+        return userName;
+    }
+
 
     [HttpGet]
     public IActionResult Login(string? returnUrl = null)
