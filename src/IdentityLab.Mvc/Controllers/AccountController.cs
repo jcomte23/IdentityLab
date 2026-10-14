@@ -21,7 +21,10 @@ public class AccountController : Controller
         _signInManager = signInManager;
         _emailSender = emailSender;
     }
-
+    
+    /*------------------------------*/
+    /*Crear un usuario en el sistema*/
+    /*------------------------------*/
     [HttpGet]
     public IActionResult Register()
     {
@@ -37,34 +40,30 @@ public class AccountController : Controller
             return View(model);
         }
 
-        var user = new ApplicationUser
-        {
-            UserName = model.Email,
-            Email = model.Email,
-            FullName = model.FullName
-        };
+        var user = new ApplicationUser(model.FullName,model.UserName, model.Email);
 
         var result = await _userManager.CreateAsync(user, model.Password);
 
         if (result.Succeeded)
         {
-            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
-            var confirmationLink = Url.Action(
-                "ConfirmEmail",
-                "Account",
-                new { userId = user.Id, code = encodedToken },
-                Request.Scheme) ?? throw new InvalidOperationException("Could not generate the email confirmation link.");
-
-
-            await _emailSender.SendEmailAsync(
-                model.Email,
-                "Confirm your email",
-                $"<p>Please confirm your account by <a href=\"{HtmlEncoder.Default.Encode(confirmationLink)}\">clicking here</a>.</p>");
+            // var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            // var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+            // var confirmationLink = Url.Action(
+            //     "ConfirmEmail",
+            //     "Account",
+            //     new { userId = user.Id, code = encodedToken },
+            //     Request.Scheme) ?? throw new InvalidOperationException("Could not generate the email confirmation link.");
+            //
+            //
+            // await _emailSender.SendEmailAsync(
+            //     model.Email,
+            //     "Confirm your email",
+            //     $"<p>Please confirm your account by <a href=\"{HtmlEncoder.Default.Encode(confirmationLink)}\">clicking here</a>.</p>");
             
             return RedirectToAction("RegisterConfirmation");
         }
 
+        
         foreach (var error in result.Errors)
         {
             ModelState.AddModelError(string.Empty, error.Description);
@@ -72,6 +71,16 @@ public class AccountController : Controller
 
         return View(model);
     }
+    
+    [HttpGet]
+    public IActionResult RegisterConfirmation()
+    {
+        return View();
+    }
+    
+    /*---------------------------------*/
+    /*Login de un usuario en el sistema*/
+    /*---------------------------------*/
 
     [HttpGet]
     public IActionResult Login(string? returnUrl = null)
@@ -142,11 +151,7 @@ public class AccountController : Controller
         return View(result.Succeeded);
     }
     
-    [HttpGet]
-    public IActionResult RegisterConfirmation()
-    {
-        return View();
-    }
+   
     
     [HttpGet]
     public IActionResult ForgotPassword()

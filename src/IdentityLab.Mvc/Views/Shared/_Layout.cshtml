@@ -10,40 +10,74 @@
     <link rel="stylesheet" href="~/IdentityLab.Mvc.styles.css" asp-append-version="true"/>
 </head>
 <body>
+@{
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString();
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
+    var isHome = currentController == "Home" && currentAction == "Index";
+    var isPrivacy = currentController == "Home" && currentAction == "Privacy";
+    var isLogin = currentController == "Account" && currentAction == "Login";
+    var userName = User.Identity?.Name ?? string.Empty;
+    var userInitial = userName.Length > 0 ? char.ToUpperInvariant(userName[0]).ToString() : "?";
+}
 <header>
-    <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-        <div class="container-fluid">
-            <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">IdentityLab.Mvc</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                    aria-expanded="false" aria-label="Toggle navigation">
+    <nav class="navbar navbar-expand-md navbar-dark bg-primary shadow-sm mb-4">
+        <div class="container">
+            <a class="navbar-brand text-white fw-semibold d-flex align-items-center gap-2" asp-area="" asp-controller="Home" asp-action="Index">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/>
+                    <path d="m9 12 2 2 4-4"/>
+                </svg>
+                IdentityLab
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar"
+                    aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                <ul class="navbar-nav flex-grow-1">
+            <div class="collapse navbar-collapse" id="mainNavbar">
+                <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
+                        <a class="nav-link link-light @(isHome ? "active fw-semibold" : "link-opacity-75 link-opacity-100-hover")"
+                           aria-current="@(isHome ? "page" : null)"
+                           asp-area="" asp-controller="Home" asp-action="Index">Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+                        <a class="nav-link link-light @(isPrivacy ? "active fw-semibold" : "link-opacity-75 link-opacity-100-hover")"
+                           aria-current="@(isPrivacy ? "page" : null)"
+                           asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
                     </li>
+                </ul>
+                <ul class="navbar-nav align-items-md-center gap-2 pb-2 pb-md-0">
                     @if (User.Identity?.IsAuthenticated == true)
                     {
-                        <li class="nav-item">
-                            <span class="nav-link text-dark">Hello, @User.Identity.Name</span>
-                        </li>
-                        <li class="nav-item">
-                            <form asp-controller="Account" asp-action="Logout" method="post">
-                                <button type="submit" class="nav-link btn btn-link text-dark">Logout</button>
-                            </form>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link link-light dropdown-toggle d-flex align-items-center gap-2" href="#"
+                               role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-white text-primary fw-bold"
+                                      style="width: 2rem; height: 2rem;" aria-hidden="true">@userInitial</span>
+                                <span>@userName</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                                <li><h6 class="dropdown-header">Signed in as</h6></li>
+                                <li><span class="dropdown-item-text fw-semibold">@userName</span></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <form asp-controller="Account" asp-action="Logout" method="post">
+                                        <button type="submit" class="dropdown-item text-danger">Logout</button>
+                                    </form>
+                                </li>
+                            </ul>
                         </li>
                     }
                     else
                     {
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-controller="Account" asp-action="Register">Register User</a>
+                            <a class="nav-link link-light @(isLogin ? "active fw-semibold" : "link-opacity-75 link-opacity-100-hover")"
+                               aria-current="@(isLogin ? "page" : null)"
+                               asp-controller="Account" asp-action="Login">Login</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-controller="Account" asp-action="Login">Login User</a>
+                            <a class="btn btn-light btn-sm text-primary fw-semibold px-3" asp-controller="Account" asp-action="Register">Create account</a>
                         </li>
                     }
                 </ul>
