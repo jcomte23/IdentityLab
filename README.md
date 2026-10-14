@@ -52,15 +52,32 @@ IdentityLab/
 
    Non-secret SMTP settings (`Host`, `Port`, `FromName`) live in `appsettings.json`.
 
-   For Docker, copy `.env.example` to `.env` and fill in the same values as environment variables (`SMTP__USERNAME`, `SMTP__PASSWORD`, `SMTP__FROMADDRESS`). In .NET, `__` maps to the `:` section separator and keys are case-insensitive.
+4. Configure the Google sign-in secrets. Each developer creates their own OAuth client in [Google Cloud Console](https://console.cloud.google.com/):
 
-4. Apply the migrations (creates the `identitylab` database and its tables):
+   1. Create a project and configure the OAuth consent screen (audience: **External**). While the app is in **Testing** mode, add your Google account as a **test user**, or Google will deny access.
+   2. Create an **OAuth client ID** of type **Web application** with these **authorized redirect URIs**:
+
+      ```
+      https://localhost:7083/signin-google
+      http://localhost:5097/signin-google
+      ```
+
+   3. Copy the client secret right away: Google only shows it once.
+
+   ```bash
+   dotnet user-secrets set "Authentication:Google:ClientId" "<your-client-id>" --project src/IdentityLab.Mvc
+   dotnet user-secrets set "Authentication:Google:ClientSecret" "<your-client-secret>" --project src/IdentityLab.Mvc
+   ```
+
+   For Docker, copy `.env.example` to `.env` and fill in the same values as environment variables (`SMTP__USERNAME`, `AUTHENTICATION__GOOGLE__CLIENTID`, ...). In .NET, `__` maps to the `:` section separator and keys are case-insensitive.
+
+5. Apply the migrations (creates the `identitylab` database and its tables):
 
    ```bash
    dotnet ef database update --project src/IdentityLab.Mvc
    ```
 
-5. Run the MVC app:
+6. Run the MVC app:
 
    ```bash
    dotnet run --project src/IdentityLab.Mvc
