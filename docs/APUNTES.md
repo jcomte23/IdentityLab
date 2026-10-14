@@ -18,9 +18,10 @@ Notas del laboratorio **IdentityLab**: Identity agregado a mano en una app MVC c
 10. [Vistas y tag helpers](#10-vistas-y-tag-helpers)
 11. [Login](#11-login)
 12. [Configuración, secretos y variables de entorno](#12-configuración-secretos-y-variables-de-entorno)
-13. [Git y commits](#13-git-y-commits)
-14. [Comandos útiles](#14-comandos-útiles)
-15. [Pendientes](#15-pendientes)
+13. [Confirmación de correo](#13-confirmación-de-correo)
+14. [Git y commits](#14-git-y-commits)
+15. [Comandos útiles](#15-comandos-útiles)
+16. [Pendientes](#16-pendientes)
 
 ---
 
@@ -414,7 +415,7 @@ public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl =
 
     if (result.IsLockedOut) { /* "This account is locked out..." */ }
 
-    ModelState.AddModelError(string.Empty, "Invalid login attempt.");
+    ModelState.AddModelError(string.Empty, "Invalid login attempt.");   // ver sección 13: ahora incluye una pista
     return View(model);
 }
 ```
@@ -452,7 +453,7 @@ Por defecto, **5 intentos fallidos bloquean la cuenta 5 minutos**. `AccessFailed
 
 ### Seguridad
 
-- **Mensaje genérico** "Invalid login attempt.", tanto si el email no existe como si la contraseña es incorrecta. Evita la **enumeración de usuarios**.
+- **Mensaje genérico** "Invalid login attempt.", tanto si el email no existe como si la contraseña es incorrecta. Evita la **enumeración de usuarios**. Con la confirmación de correo, este mismo mensaje cubre también `IsNotAllowed` ([sección 13](#13-confirmación-de-correo)).
 - **`Url.IsLocalUrl(returnUrl)`** evita el **open redirect**. Sin esta comprobación, `?returnUrl=https://sitio-falso.com` mandaría al usuario a un sitio falso justo después de iniciar sesión en el real.
 - `IsLocalUrl` tiene `[NotNullWhen(true)]`, por eso `Redirect(returnUrl)` no da advertencia de *nullable*.
 
@@ -569,7 +570,330 @@ SMTP__FROMADDRESS=
 
 ---
 
-## 13. Git y commits
+## 13. Confirmación de correo
+
+### El mapa completo
+
+```
+┌─ 1. INFRAESTRUCTURA DE CORREO ─────────── "saber enviar correos"
+│   Contraseña de aplicación de Gmail
+│   User Secrets + appsettings.json  →  sección Smtp
+│   SmtpSettings                     →  configuración como clase (Options pattern)
+│   IEmailSender                     →  el contrato
+│   SmtpEmailSender (MailKit)        →  la implementación
+│   Program.cs                       →  Configure<SmtpSettings> + AddTransient
+│
+├─ 2. EL FLUJO DE CONFIRMACIÓN ─────────── "usar el correo para confirmar"
+│   Register:  GenerateEmailConfirmationTokenAsync
+│              → Base64UrlEncode → Url.Action → SendEmailAsync
+│              → RedirectToAction("RegisterConfirmation")
+│   RegisterConfirmation + vista     →  "Revisa tu correo"
+│   ConfirmEmail:  FindByIdAsync → Base64UrlDecode → ConfirmEmailAsync
+│   ConfirmEmail.cshtml              →  éxito o error
+│
+└─ 3. LA REGLA ─────────────────────────── "exigirlo"
+    options.SignIn.RequireConfirmedEmail = true
+    Mensaje genérico en Login (sin revelar IsNotAllowed)
+```
+
+El bloque 1 se hace **una sola vez**: el reset de contraseña reutilizará el mismo `IEmailSender`.
+
+### Bloque 1: infraestructura de correo
+
+#### SMTP con Gmail
+
+- **Cualquier proveedor SMTP sirve** (Gmail, Outlook, Brevo, SendGrid…). El código es el mismo y solo cambia la configuración. Outlook personal puede exigir OAuth, así que Gmail es lo más simple para aprender.
+- Gmail **no acepta la contraseña normal**. Necesita una **contraseña de aplicación**: activar la verificación en 2 pasos → myaccount.google.com/apppasswords → 16 caracteres, **sin espacios**.
+
+| Dato | Valor |
+|---|---|
+| Host | `smtp.gmail.com` |
+| Puerto | `587` con **STARTTLS** (empieza sin cifrar y luego activa TLS) |
+| Usuario | El Gmail completo |
+| Contraseña | La contraseña de aplicación |
+
+- **`FromAddress` debe ser la misma cuenta que `UserName`.** Gmail no permite enviar como otra persona (protección contra suplantación) y reemplaza el remitente. Lo que el destinatario ve primero es el **`FromName`**.
+- A diferencia de la contraseña local de PostgreSQL, una contraseña de aplicación filtrada permite **enviar correos en tu nombre desde cualquier lugar**. Por eso va en User Secrets ([sección 12](#12-configuración-secretos-y-variables-de-entorno)).
+
+#### MailKit
+
+- Librería de .NET para enviar (SMTP) y leer (IMAP/POP3) correos. Incluye **MimeKit**, que sirve para construir el mensaje.
+- `System.Net.Mail.SmtpClient` existe, pero **Microsoft desaconseja usarlo** en código nuevo y recomienda MailKit.
+- ⚠️ Hay **dos `SmtpClient`**. El correcto es **`MailKit.Net.Smtp.SmtpClient`**.
+
+```bash
+dotnet add src/IdentityLab.Mvc package MailKit
+```
+
+#### Options pattern: `SmtpSettings`
+
+En lugar de leer `configuration["Smtp:Host"]` como texto en cada sitio (repetitivo, sin conversión de tipos y un error de escritura devuelve `null` en silencio), se mapea **la sección entera a una clase**:
+
+```csharp
+public class SmtpSettings
+{
+    public string Host { get; set; } = string.Empty;
+    public int Port { get; set; }
+    public string UserName { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+    public string FromName { get; set; } = string.Empty;
+    public string FromAddress { get; set; } = string.Empty;
+}
+```
+
+```csharp
+builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("Smtp"));
+```
+
+- Los nombres de las propiedades deben coincidir con las claves de la sección (sin importar mayúsculas).
+- `GetSection("Smtp")` toma la sección **ya combinada** (appsettings + User Secrets + variables de entorno).
+- Se recibe en el constructor como **`IOptions<SmtpSettings>`**. `.Value` devuelve el objeto lleno.
+- `Port` no lleva `= string.Empty`: los números ya tienen valor por defecto (`0`).
+
+#### La interfaz `IEmailSender`
+
+```csharp
+public interface IEmailSender
+{
+    Task SendEmailAsync(string to, string subject, string htmlBody);
+}
+```
+
+- Una interfaz es un **contrato**: dice **qué** se hace, no **cómo**.
+- El controlador depende de `IEmailSender`, no de Gmail. Para cambiar de proveedor se crea otra clase y se cambia **una línea** en `Program.cs`. Es la **inversión de dependencias** (la "D" de SOLID).
+- Es la misma idea que `UserManager` con los *stores*: no sabe que la base es PostgreSQL.
+
+**En Clean Architecture:**
+
+| Archivo | Capa | Por qué |
+|---|---|---|
+| `IEmailSender` | **Application** | Quien tiene la necesidad define el contrato |
+| `SmtpEmailSender` | **Infrastructure** | Conoce los detalles técnicos (MailKit, SMTP) |
+| `SmtpSettings` | **Infrastructure** | Es un detalle de conexión |
+
+Las dependencias apuntan **hacia adentro**: Infrastructure conoce a Application, nunca al revés. Si la interfaz estuviera en Infrastructure, la flecha apuntaría hacia afuera.
+
+#### La implementación `SmtpEmailSender`
+
+```csharp
+public async Task SendEmailAsync(string to, string subject, string htmlBody)
+{
+    var message = new MimeMessage();
+    message.From.Add(new MailboxAddress(_settings.FromName, _settings.FromAddress));
+    message.To.Add(MailboxAddress.Parse(to));
+    message.Subject = subject;
+    message.Body = new TextPart("html") { Text = htmlBody };
+
+    using var client = new SmtpClient();
+    await client.ConnectAsync(_settings.Host, _settings.Port, SecureSocketOptions.StartTls);
+    await client.AuthenticateAsync(_settings.UserName, _settings.Password);
+    await client.SendAsync(message);
+    await client.DisconnectAsync(true);
+}
+```
+
+| Paso | Qué hace |
+|---|---|
+| `MimeMessage` | El correo: remitente, destinatarios (son listas), asunto y cuerpo |
+| `TextPart("html")` | Cuerpo en HTML, para que el enlace se pueda pulsar |
+| `ConnectAsync(..., StartTls)` | Conecta al puerto 587 y activa el cifrado |
+| `AuthenticateAsync` | Inicia sesión con la contraseña de aplicación |
+| `SendAsync` | Entrega el correo |
+| `DisconnectAsync(true)` | Cierra educadamente (envía `QUIT`) |
+| `using var client` | Libera la conexión aunque haya un error |
+
+#### Registro y ciclos de vida
+
+```csharp
+builder.Services.AddTransient<IEmailSender, SmtpEmailSender>();
+```
+
+"Cuando alguien pida un `IEmailSender`, dale un `SmtpEmailSender`."
+
+| Ciclo de vida | Instancias | Ejemplo |
+|---|---|---|
+| `Transient` | Una nueva **cada vez** que se pide | `SmtpEmailSender`: no guarda estado |
+| `Scoped` | Una **por petición HTTP** | `DbContext` |
+| `Singleton` | **Una** para toda la app | Cachés |
+
+El orden de los registros no importa: Identity y el SMTP no dependen uno del otro, y aunque dependieran, las dependencias se resuelven al **crear** los objetos, no al anotarlos.
+
+#### Probar cada pieza por separado
+
+Antes de mezclar el correo con Identity, se probó **solo el envío** con una acción temporal:
+
+```csharp
+public async Task<IActionResult> TestEmail([FromServices] IEmailSender emailSender)
+{
+    await emailSender.SendEmailAsync("...", "IdentityLab test", "<h1>It works!</h1>");
+    return Content("Email sent.");
+}
+```
+
+- **`[FromServices]`** pide un servicio en el parámetro de una acción, en lugar de en el constructor.
+- **`Content("...")`** devuelve texto plano sin vista.
+- Si falla, se sabe que el problema es el SMTP: `AuthenticationException`/`535` indica credenciales, y un *timeout* indica host o puerto.
+- ⚠️ **Se borra después**: cualquiera podría usar esa URL para enviar correos.
+
+### Bloque 2: el flujo de confirmación
+
+#### En `POST Register`
+
+```csharp
+if (result.Succeeded)
+{
+    var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+    var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+    var confirmationLink = Url.Action(
+        "ConfirmEmail",
+        "Account",
+        new { userId = user.Id, code = encodedToken },
+        Request.Scheme)
+        ?? throw new InvalidOperationException("Could not generate the email confirmation link.");
+
+    await _emailSender.SendEmailAsync(
+        model.Email,
+        "Confirm your email",
+        $"<p>Please confirm your account by <a href=\"{HtmlEncoder.Default.Encode(confirmationLink)}\">clicking here</a>.</p>");
+
+    return RedirectToAction("RegisterConfirmation");
+}
+```
+
+**El token** (`GenerateEmailConfirmationTokenAsync`):
+- Lo genera el proveedor registrado con **`AddDefaultTokenProviders()`**.
+- Contiene, **cifrado y firmado** con Data Protection: para quién es, para qué sirve, cuándo se creó y el `SecurityStamp`.
+- **No se guarda en la base de datos.** Identity lo verifica descifrándolo; si se modifica una sola letra, la firma deja de coincidir.
+- **Caduca en 1 día.** Si cambia el `SecurityStamp` (por ejemplo, al cambiar la contraseña), los tokens anteriores dejan de valer.
+
+**Base64Url** (`WebEncoders.Base64UrlEncode`, en `Microsoft.AspNetCore.WebUtilities`):
+
+| Carácter | Problema en una URL | En Base64Url |
+|---|---|---|
+| `+` | Se lee como espacio | `-` |
+| `/` | Separa rutas | `_` |
+| `=` | Separa clave y valor | Se elimina |
+
+Al recibirlo hay que hacer la operación inversa (`Base64UrlDecode`).
+
+**El enlace** (`Url.Action`):
+- El 4º argumento, **`Request.Scheme`**, genera una URL **absoluta** (`https://dominio/...`). Sin él, la URL es relativa y **no sirve en un correo**, porque ahí no hay "sitio actual".
+- Lleva `userId` y `code` porque `ConfirmEmailAsync` necesita el usuario y el token.
+- **Devuelve `null` si la acción no existe**, sin dar error. Por eso se agrega el `?? throw`.
+
+**El correo:**
+- El controlador recibe `IEmailSender` por el constructor, sin saber que detrás hay Gmail.
+- **`HtmlEncoder.Default.Encode(...)`** (en `System.Text.Encodings.Web`) evita que caracteres como `&` o `"` rompan el HTML. Es una buena costumbre siempre que se mete un valor en HTML construido a mano, y protege contra XSS.
+- `\"` es una comilla escapada dentro del string.
+
+**Ya no se inicia sesión al registrarse.** `SignInAsync` **no comprueba** la confirmación (solo lo hace `PasswordSignInAsync`), así que se reemplaza por una redirección a "Revisa tu correo". Se mantiene **Post-Redirect-Get**: si el usuario pulsa F5, no se registra ni se reenvía el correo.
+
+#### `RegisterConfirmation`
+
+Acción `GET` que solo devuelve una vista sin `@model`, con el mensaje "Check your email".
+
+#### `ConfirmEmail`
+
+```csharp
+[HttpGet]
+public async Task<IActionResult> ConfirmEmail(string? userId, string? code)
+{
+    if (userId is null || code is null) return View(false);
+
+    var user = await _userManager.FindByIdAsync(userId);
+    if (user is null) return View(false);
+
+    var token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(code));
+    var result = await _userManager.ConfirmEmailAsync(user, token);
+
+    return View(result.Succeeded);
+}
+```
+
+- Los parámetros se llaman **igual** que en el `Url.Action`, para que el *model binding* los tome de la URL.
+- **`ConfirmEmailAsync`** comprueba la firma, que el token sea para este usuario y para este propósito, la caducidad y el `SecurityStamp`. Si todo está bien, pone **`EmailConfirmed = true`**.
+- **Todos los fallos muestran lo mismo**, para no dar pistas.
+- Limitación: si el `code` no es Base64Url válido, `Base64UrlDecode` lanza una excepción y se ve una página de error. No es un problema de seguridad, porque no se confirma nada.
+
+**¿Un `GET` que cambia datos?** Es una excepción aceptada:
+- Un enlace de correo **solo puede hacer `GET`**.
+- El riesgo del Logout (que otro sitio lo dispare con `<img src>`) no existe: hace falta el **token**, que solo llegó al correo.
+- **Repetirlo no hace daño**: confirmar dos veces deja el mismo resultado.
+
+#### La vista `ConfirmEmail.cshtml`
+
+- **`@model bool`**: una vista puede recibir cualquier tipo, no solo un ViewModel.
+- `@if (Model)` muestra el éxito (con enlace a Login) o un error genérico.
+
+### Bloque 3: la regla
+
+#### Opciones de Identity
+
+```csharp
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+    {
+        options.SignIn.RequireConfirmedEmail = true;
+    })
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddDefaultTokenProviders();
+```
+
+`options =>` es una **lambda** que recibe todas las opciones de Identity:
+
+| Grupo | Ejemplos |
+|---|---|
+| `options.SignIn` | Exigir el email o el teléfono confirmados |
+| `options.Password` | Longitud mínima, mayúsculas, símbolos… |
+| `options.Lockout` | Intentos fallidos y duración del bloqueo |
+| `options.User` | `RequireUniqueEmail`, caracteres permitidos |
+
+`RequireConfirmedAccount` hace lo mismo con la configuración por defecto, pero es más genérica: permite definir qué significa "cuenta confirmada". `RequireConfirmedEmail` dice exactamente lo que queremos.
+
+#### Dos estrategias para limitar a los no confirmados
+
+| Estrategia | Cómo | Complejidad |
+|---|---|---|
+| **No puede iniciar sesión** hasta confirmar ✅ (la elegida) | `RequireConfirmedEmail` + `IsNotAllowed` | Baja |
+| **Puede entrar, pero algunas acciones están bloqueadas** | Políticas de autorización + claims | Más avanzada |
+
+#### El orden interno de `PasswordSignInAsync` y la enumeración
+
+```
+1. ¿Existe el usuario?          → si no: Failed
+2. ¿Puede iniciar sesión?       → si no confirmó: IsNotAllowed   ← ANTES de mirar la contraseña
+3. ¿Está bloqueado?             → IsLockedOut                     ← también antes
+4. ¿La contraseña es correcta?  → si no: Failed
+```
+
+Como **`IsNotAllowed` se devuelve aunque la contraseña sea incorrecta**, un mensaje específico ("confirma tu correo") revelaría qué cuentas existen probando con contraseñas inventadas.
+
+❌ **Error cometido:** agregar `if (result.IsNotAllowed)` con un mensaje distinto **y mantener** el genérico al final. Aunque los textos se parezcan, **que haya dos mensajes distintos ya filtra información**: basta con compararlos.
+
+✅ **Solución:** un único mensaje para todos los fallos, que oriente sin revelar:
+
+```csharp
+ModelState.AddModelError(string.Empty, "Invalid login attempt. If you just registered, make sure you have confirmed your email.");
+```
+
+> **Regla:** si dos situaciones no deben poder distinguirse, tienen que producir **exactamente la misma respuesta**: mismo texto, misma página y mismo código HTTP.
+
+El mensaje de `IsLockedOut` tiene el mismo problema. Es un compromiso que muchas apps aceptan, porque avisar del bloqueo es útil.
+
+### Cómo probarlo
+
+1. Registrarse → aparece "Check your email" y **no** hay sesión iniciada.
+2. Intentar iniciar sesión antes de confirmar → mensaje genérico con la pista.
+3. Pulsar el enlace del correo → "Thank you for confirming your email".
+4. Comprobar en la base:
+   ```sql
+   SELECT "Email", "EmailConfirmed" FROM "AspNetUsers";
+   ```
+5. Abrir el enlace con una letra del `code` cambiada → no confirma nada.
+6. Iniciar sesión después de confirmar → ✅
+
+---
+
+## 14. Git y commits
 
 ### Conventional Commits
 
@@ -601,10 +925,13 @@ SMTP__FROMADDRESS=
 6. `feat: add user registration`
 7. `feat: add user login`
 8. `feat: add logout and fix login returnUrl`
+9. `chore: configure SMTP settings and secrets`
+10. `feat: add SMTP email sender with MailKit`
+11. `feat: add email confirmation`
 
 ---
 
-## 14. Comandos útiles
+## 15. Comandos útiles
 
 ```bash
 # Paquetes
@@ -633,12 +960,16 @@ dotnet run --project src/IdentityLab.Mvc
 
 ---
 
-## 15. Pendientes
+## 16. Pendientes
 
 - [x] Corregir `GET Login` para que reciba `returnUrl` y lo guarde en `ViewData`.
 - [x] **Logout**: acción `POST` con `SignOutAsync()`.
 - [x] Mostrar en el navbar si hay sesión iniciada (directamente en `_Layout.cshtml`, con `User.Identity?.IsAuthenticated`).
-- [ ] **Confirmación de correo** (en curso): SMTP con Gmail, MailKit, `IEmailSender`, token de confirmación y `RequireConfirmedAccount`.
+- [x] **Confirmación de correo**: SMTP con Gmail, MailKit, `IEmailSender`, token de confirmación y `RequireConfirmedEmail`.
+- [ ] Resolver los usuarios antiguos con `EmailConfirmed = false` (ya no pueden iniciar sesión).
+- [ ] (Opcional) Reenviar el correo de confirmación.
+- [ ] (Opcional) Manejar un `code` que no sea Base64Url válido en `ConfirmEmail`.
+- [ ] Reset de contraseña (reutiliza `IEmailSender`, con `GeneratePasswordResetTokenAsync`).
 - [ ] Ajustar las opciones de Identity: reglas de contraseña y `RequireUniqueEmail`.
 - [ ] `ConfigureApplicationCookie`, después de `AddIdentity`.
 - [ ] Proteger páginas con `[Authorize]`.
