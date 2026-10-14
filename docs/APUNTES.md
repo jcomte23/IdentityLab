@@ -20,9 +20,10 @@ Notas del laboratorio **IdentityLab**: Identity agregado a mano en una app MVC c
 12. [Configuración, secretos y variables de entorno](#12-configuración-secretos-y-variables-de-entorno)
 13. [Confirmación de correo](#13-confirmación-de-correo)
 14. [Recuperación de contraseña](#14-recuperación-de-contraseña)
-15. [Git y commits](#15-git-y-commits)
-16. [Comandos útiles](#16-comandos-útiles)
-17. [Pendientes](#17-pendientes)
+15. [Login con terceros (Google)](#15-login-con-terceros-google)
+16. [Git y commits](#16-git-y-commits)
+17. [Comandos útiles](#17-comandos-útiles)
+18. [Pendientes](#18-pendientes)
 
 ---
 
@@ -1014,7 +1015,297 @@ Muchos ejemplos (incluida la plantilla de Microsoft) redirigen a la página de �
 
 ---
 
-## 15. Git y commits
+## 15. Login con terceros (Google)
+
+### La idea
+
+Con el login con terceros, **tu app no verifica la contraseña**: se lo delega al proveedor (Google, Microsoft, GitHub, Apple…), que confirma quién es el usuario y le devuelve sus datos. Detrás hay dos estándares:
+
+- **OAuth 2.0**: el protocolo para que una app reciba permisos de otra.
+- **OpenID Connect**: una capa sobre OAuth que añade "quién es el usuario".
+
+### El orden lógico (para cualquier proveedor)
+
+```
+1. Registrar la app en el proveedor   → Client ID + Client Secret + redirect URIs
+2. Guardar las llaves                 → User Secrets / .env
+3. Paquete NuGet + configuración      → AddGoogle / AddMicrosoftAccount / ...
+4. Las acciones                       → ExternalLogin + ExternalLoginCallback
+5. La interfaz                        → el botón
+```
+
+El botón es solo interfaz: **no funciona hasta que existen los pasos 1 a 4**. Mientras tanto, se dejó desactivado (`disabled`).
+
+### Los "drivers" de cada proveedor
+
+Igual que con las bases de datos (un paquete para PostgreSQL y otro para MySQL), **cada proveedor tiene su propio paquete**, y tu código cambia muy poco entre uno y otro.
+
+| | Laravel | .NET |
+|---|---|---|
+| **Oficiales** | Socialite | Microsoft: **Google, Microsoft, Facebook y X**, un paquete cada uno |
+| **Comunidad** | Socialite Providers | **`AspNet.Security.OAuth.Providers`**: GitHub, Discord, Apple, LinkedIn… (un paquete por proveedor) |
+| **Genérico** | — | **`AddOAuth`** y **`AddOpenIdConnect`**: para cualquier proveedor que siga el estándar y no tenga paquete |
+
+**Dónde se registra la app en cada proveedor:**
+
+| Proveedor | Plataforma | Detalle |
+|---|---|---|
+| Google | Google Cloud Console | — |
+| Microsoft | Microsoft Entra → *App registrations* | Gratis |
+| GitHub | *Settings → Developer settings → OAuth Apps* | El más sencillo |
+| Apple | Apple Developer | ⚠️ Requiere la membresía de pago, y el "secret" es un token firmado con una llave privada |
+
+### Paso 1: Google Cloud Console
+
+1. **Crear un proyecto** (`IdentityLab`).
+2. **Pantalla de consentimiento** (*OAuth consent screen* o *Google Auth Platform*): nombre de la app, email de soporte y audiencia **External**.
+   - ⚠️ En modo **Testing**, **solo pueden entrar los *test users***. Hay que agregar la propia cuenta; si no, Google devuelve "access denied".
+   - Email, nombre e id vienen por defecto y **no requieren que Google revise la app**.
+3. **Crear un OAuth client ID** de tipo **Web application**, con las **redirect URIs**:
+   ```
+   https://localhost:7083/signin-google
+   http://localhost:5097/signin-google
+   ```
+4. ⚠️ **Copiar el Client Secret en ese momento**: Google ya no lo vuelve a mostrar.
+
+**La redirect URI:**
+- Es **a dónde devuelve Google al usuario** después del login.
+- `/signin-google` es la ruta que el paquete de Google **atiende por defecto**. No hay que crear ninguna acción con ese nombre.
+- Google **solo** redirige a las URIs registradas. Es una protección: nadie puede hacer que los datos del usuario vayan a otro sitio.
+- Debe coincidir **exactamente** (protocolo, puerto y ruta). Si no, aparece **`redirect_uri_mismatch`**, el error más común.
+
+| Dato | ¿Es secreto? |
+|---|---|
+| Client ID | No del todo: viaja visible en la URL hacia Google |
+| **Client Secret** | **Sí**: con él, otro podría hacerse pasar por tu app |
+
+### Paso 2: las llaves
+
+```bash
+dotnet user-secrets set "Authentication:Google:ClientId" "..." --project src/IdentityLab.Mvc
+dotnet user-secrets set "Authentication:Google:ClientSecret" "..." --project src/IdentityLab.Mvc
+```
+
+- `Authentication:<Proveedor>:...` es la convención de Microsoft.
+- En `.env` / `.env.example`: **`AUTHENTICATION__GOOGLE__CLIENTID`** y **`AUTHENTICATION__GOOGLE__CLIENTSECRET`** (un `__` por cada `:`, sin `_` en medio de `CLIENTID`).
+- Están documentadas en el README: cada colaborador crea su propio cliente de OAuth.
+
+### Paso 3: el paquete y `AddGoogle`
+
+```bash
+dotnet add src/IdentityLab.Mvc package Microsoft.AspNetCore.Authentication.Google
+```
+
+Es un paquete oficial de Microsoft, así que su versión sigue la de ASP.NET Core (10.x).
+
+```csharp
+builder.Services.AddAuthentication()
+    .AddGoogle(options =>
+    {
+        options.ClientId = builder.Configuration["Authentication:Google:ClientId"]
+            ?? throw new InvalidOperationException("Google ClientId not found.");
+        options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"]
+            ?? throw new InvalidOperationException("Google ClientSecret not found.");
+    });
+```
+
+- **`AddIdentity` ya llama a `AddAuthentication` por dentro.** Llamarlo otra vez sin argumentos solo devuelve el constructor para **agregar esquemas**, sin cambiar lo que configuró Identity.
+- Va **debajo de `AddIdentity`**, porque se apoya en su configuración.
+- `AddGoogle` trae **su propia clase de opciones** (el `options` de la lambda), así que no hace falta una clase como `SmtpSettings`.
+
+**Los esquemas de autenticación:**
+
+| Esquema | Lo registra | Para qué |
+|---|---|---|
+| `Identity.Application` | `AddIdentity` | La cookie de **la sesión** |
+| `Identity.External` | `AddIdentity` | Una cookie **temporal** con los datos que devuelve el proveedor |
+| `Google` | `AddGoogle` | Redirigir a Google, atender `/signin-google`, canjear el código por los datos y guardarlos en `Identity.External` |
+
+**⚠️ El `?? throw` dentro de una lambda se ejecuta más tarde.** Se comprobó en ejecución:
+
+| `?? throw` | ¿Cuándo se ejecuta? | Si falta el valor |
+|---|---|---|
+| Cadena de conexión (fuera de una lambda) | Al arrancar | La app **no arranca** |
+| Llaves de Google (dentro de `AddGoogle(options => ...)`) | En la primera petición | La app arranca, pero **todas las páginas dan 500** |
+
+Pasa en **todas** las páginas porque el esquema de Google revisa cada petición para saber si es la vuelta desde Google.
+
+### Paso 4a: `ExternalLogin`, enviar al usuario al proveedor
+
+```csharp
+[HttpPost]
+[ValidateAntiForgeryToken]
+public IActionResult ExternalLogin(string provider, string? returnUrl = null)
+{
+    var redirectUrl = Url.Action("ExternalLoginCallback", "Account", new { returnUrl });
+    var properties = _signInManager.ConfigureExternalAuthenticationProperties(provider, redirectUrl);
+    return Challenge(properties, provider);
+}
+```
+
+- **Es genérico: sirve para cualquier proveedor.** La palabra "Google" no aparece: `provider` es el **nombre del esquema** y llega desde el botón. Por eso se llama `ExternalLogin` y no `ExternalLoginGoogle`.
+- `ConfigureExternalAuthenticationProperties` prepara un "paquete" con la URL de vuelta, que viaja **cifrado** en el parámetro **`state`**. Ese `state` también protege contra CSRF.
+- `Challenge` le pide al esquema que autentique, y el esquema responde con un **302 hacia Google**.
+- Es **`POST`** por lo mismo que el Logout: nadie puede dispararlo desde otro sitio con un enlace.
+- Si alguien envía un `provider` que no existe, `Challenge` da **500**. Se puede validar antes con `GetExternalAuthenticationSchemesAsync()`.
+
+**El recorrido completo:**
+
+```
+1. POST /Account/ExternalLogin  (provider=Google)                     ← tu código
+2. 302 → accounts.google.com/...?client_id=...&redirect_uri=...&state=...
+3.       El usuario inicia sesión en Google y acepta
+4. 302 → /signin-google?code=...&state=...
+5.       El paquete canjea el "code" por los datos → cookie Identity.External
+6. 302 → /Account/ExternalLoginCallback?returnUrl=...                 ← tu código
+```
+
+**Lo único específico de cada proveedor:** la línea `AddGoogle` / `AddMicrosoftAccount` en `Program.cs` y el `asp-route-provider` del botón. Las acciones no cambian. Lo que sí varía son **los datos que envía cada uno**: GitHub, por ejemplo, puede no enviar el email.
+
+### El botón
+
+```cshtml
+<form asp-action="ExternalLogin" asp-route-provider="Google" asp-route-returnUrl="@ViewData["ReturnUrl"]" method="post">
+    <button type="submit" class="...">
+        <svg>...logo de Google...</svg>
+        <span>Continue with Google</span>
+    </button>
+</form>
+```
+
+- ❌ **Error cometido:** dejar `type="button"`. Con `type="button"`, **el botón no hace nada**. Tiene que ser **`type="submit"`** para enviar el formulario.
+- Es un formulario **aparte** del de login o registro: en HTML no se pueden anidar formularios.
+- Está en **Login y en Register**. En Login también envía el `returnUrl`.
+- En apps con varios proveedores, los botones se generan con `SignInManager.GetExternalAuthenticationSchemesAsync()` en lugar de escribirlos a mano.
+
+### Lo que devuelve Google
+
+`GetExternalLoginInfoAsync()` lee la cookie temporal `Identity.External`:
+
+| Dato | Qué es |
+|---|---|
+| `info.LoginProvider` | `"Google"` |
+| `info.ProviderKey` | **El id del usuario en Google** (el `sub` de OpenID Connect). **Nunca cambia**, aunque cambie el email. No es secreto |
+| `info.Principal` | Los **claims**: `ClaimTypes.Email`, `ClaimTypes.Name`… (se leen con `FindFirstValue`) |
+
+**La app identifica a los usuarios externos por `LoginProvider` + `ProviderKey`, no por el email.** Es la clave primaria de **`AspNetUserLogins`**:
+
+```
+LoginProvider | ProviderKey            | UserId
+Google        | 112987718249908652938  | (el usuario de la app)
+```
+
+Al volver de Google **todavía no hay sesión**: los datos solo están en la cookie temporal, que dura unos minutos.
+
+### Paso 4b: `ExternalLoginCallback`
+
+```
+¿Hay en AspNetUserLogins una fila (Google, ProviderKey)?
+├─ Sí → ExternalLoginSignInAsync → sesión iniciada ✅
+└─ No → ¿El proveedor dio el email?                     no → error
+        ¿Ya existe una cuenta local con ese email?        sí → "Log in with your password"
+        Crear el usuario (sin contraseña, EmailConfirmed = true, username generado)
+        → AddLoginAsync (vincular) → ExternalLoginSignInAsync ✅
+```
+
+**1. Leer los datos:** si `GetExternalLoginInfoAsync()` devuelve `null` (alguien abrió la URL directamente o la cookie caducó), se vuelve al Login con un mensaje. **`View("Login", new LoginViewModel())`** muestra la vista **de otra acción**, así que no hace falta crear una vista de error; también hay que poner `ViewData["ReturnUrl"]`.
+
+**2. `ExternalLoginSignInAsync(provider, providerKey, isPersistent, bypassTwoFactor)`** es el equivalente de `PasswordSignInAsync`:
+
+| `PasswordSignInAsync` | `ExternalLoginSignInAsync` |
+|---|---|
+| Busca por `UserName` | Busca en **`AspNetUserLogins`** |
+| Verifica la contraseña | No hay contraseña: el proveedor ya lo hizo |
+| Comprueba confirmación y bloqueo | **Igual** (`IsNotAllowed`, `IsLockedOut`) |
+| Crea la cookie de sesión | **Igual**, y además **borra la cookie temporal** |
+
+- **`RequireConfirmedEmail` también se aplica aquí.** Un usuario externo con `EmailConfirmed = false` recibe `IsNotAllowed`.
+- `bypassTwoFactor: true`: no pide el 2FA de la app al entrar con el proveedor.
+- **`Failed` significa "no hay ningún usuario vinculado"**: es el caso en que se crea el usuario.
+- Aquí la enumeración de usuarios no es un problema: la persona **ya demostró ante Google** que es dueña de la cuenta.
+
+**3. ¿Hay email?** Google siempre lo envía, pero el método es genérico y otros proveedores podrían no hacerlo.
+
+**4. No vincular automáticamente por email.** Si ya existe una cuenta local con ese email, se le pide entrar con su contraseña (el campo aparece relleno con `new LoginViewModel { Email = email }`).
+
+> Por qué: un atacante podría registrarse **antes** con el email de la víctima (sin confirmarlo). Si al entrar con Google se vinculara automáticamente, **el Google de la víctima quedaría conectado a la cuenta del atacante**, que seguiría entrando con su contraseña. La vinculación segura se hace **desde "Mi cuenta", con la sesión iniciada**.
+
+**5. Crear el usuario:**
+
+```csharp
+var user = new ApplicationUser(
+    fullName: info.Principal.FindFirstValue(ClaimTypes.Name),
+    userName: await GenerateUniqueUserNameAsync(email),
+    email: email)
+{
+    EmailConfirmed = true
+};
+
+var createResult = await _userManager.CreateAsync(user);   // sin contraseña
+```
+
+- Se combinan el **constructor** (lo obligatorio) y el **inicializador** (`EmailConfirmed`), con **argumentos con nombre** para no depender del orden.
+- **`EmailConfirmed = true`**: el proveedor ya verificó el email. ⚠️ Solo si el proveedor **lo garantiza**: Google sí, GitHub no siempre. Si no, se envía el correo de confirmación como en un registro normal.
+- **`CreateAsync(user)` sin contraseña** deja `PasswordHash = null`: solo podrá entrar con el proveedor.
+
+**6. `AddLoginAsync(user, info)`** inserta la fila en `AspNetUserLogins`. A partir de ahí, `ExternalLoginSignInAsync` devuelve `Succeeded`.
+
+**7. Si la vinculación falla, se borra el usuario** (`DeleteAsync`). Si no, quedaría un usuario sin contraseña y sin proveedor que nadie podría usar. Con `createResult = loginResult;`, un solo `foreach` muestra el error de cualquiera de los dos pasos.
+
+❌ **Error cometido:** no copiar el bloque final (`foreach` de errores + `return View("Login", ...)`). El compilador dio **`CS0161: no todas las rutas de acceso de código devuelven un valor`**: un método que devuelve `IActionResult` debe terminar en un `return` **en todos sus caminos**.
+
+### Generar un username único
+
+Google no da un username, y la app lo exige. Se decidió **generarlo** (más adelante el usuario podrá cambiarlo):
+
+```csharp
+private async Task<string> GenerateUniqueUserNameAsync(string email)
+{
+    var localPart = email.Split('@')[0];
+    var baseName = new string(localPart
+        .Where(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-')
+        .ToArray());
+
+    if (baseName.Length < 3) baseName = "user" + baseName;
+
+    var userName = baseName;
+    var suffix = 1;
+    while (await _userManager.FindByNameAsync(userName) is not null)
+    {
+        userName = $"{baseName}{suffix}";
+        suffix++;
+    }
+
+    return userName;
+}
+```
+
+```
+javiercombita2014@gmail.com → javiercombita2014 → ¿existe? → javiercombita20141 ✅
+```
+
+- Identity solo permite en el `UserName` letras y números **ASCII** y `-._@+`.
+- ⚠️ **`char.IsAsciiLetterOrDigit`**, no `char.IsLetterOrDigit`: el segundo acepta `á` o `ñ`, que Identity **rechaza**.
+- Mínimo 3 caracteres, como en el `RegisterViewModel`.
+- **`private`**: todo método `public` de un controlador es una **acción** accesible por URL. Los métodos de apoyo deben ser privados.
+
+### Probarlo y limpiar
+
+```sql
+SELECT u."Id", u."UserName", u."Email", u."PasswordHash" IS NULL AS "SinPassword", l."LoginProvider"
+FROM "AspNetUsers" u
+LEFT JOIN "AspNetUserLogins" l ON l."UserId" = u."Id"
+ORDER BY u."Email";
+```
+
+- Para repetir la prueba hay que **borrar el usuario de la base**: `DELETE FROM "AspNetUsers" WHERE "Id" = '...';`. Hay que **cerrar sesión antes**.
+- **No hace falta borrar nada más**: por el `onDelete: Cascade` de la migración, PostgreSQL borra solo su fila en `AspNetUserLogins`, sus roles, claims y tokens.
+- ⚠️ Borrar por `Email` puede borrar **varios** usuarios, porque el email no es único por defecto. Más seguro por `Id`.
+- Para volver a ver la pantalla de permisos de Google: *myaccount.google.com → Seguridad → Conexiones con apps de terceros → IdentityLab → Eliminar*.
+
+---
+
+## 16. Git y commits
 
 ### Conventional Commits
 
@@ -1051,10 +1342,13 @@ Muchos ejemplos (incluida la plantilla de Microsoft) redirigen a la página de �
 11. `feat: add email confirmation`
 12. `docs: add email confirmation notes`
 13. `feat: add password reset`
+14. `feat: ask for username on registration`
+15. `docs: document Google sign-in setup`
+16. `feat: add Google sign-in`
 
 ---
 
-## 16. Comandos útiles
+## 17. Comandos útiles
 
 ```bash
 # Paquetes
@@ -1083,7 +1377,7 @@ dotnet run --project src/IdentityLab.Mvc
 
 ---
 
-## 17. Pendientes
+## 18. Pendientes
 
 - [x] Corregir `GET Login` para que reciba `returnUrl` y lo guarde en `ViewData`.
 - [x] **Logout**: acción `POST` con `SignOutAsync()`.
@@ -1098,5 +1392,12 @@ dotnet run --project src/IdentityLab.Mvc
 - [ ] `ConfigureApplicationCookie`, después de `AddIdentity`.
 - [ ] Proteger páginas con `[Authorize]`.
 - [ ] Etapa 3: `IdentityLab.Api` con `AddIdentityCore` + JWT.
+- [x] **Login con Google**: `AddGoogle`, `ExternalLogin`, `ExternalLoginCallback` y botón en Login y Register.
+- [ ] ⚠️ **Login con email**: los usuarios nuevos tienen un `UserName` distinto de su email, y `PasswordSignInAsync(model.Email, ...)` busca por `UserName`. Decidir: entrar con email, con username o con cualquiera de los dos.
+- [ ] Vincular un proveedor externo a una cuenta existente desde "Mi cuenta" (con la sesión iniciada).
+- [ ] Permitir que el usuario cambie el username generado.
+- [ ] Manejar la cancelación en la pantalla de Google (hoy da error 500).
+- [ ] Resolver la vulnerabilidad de `System.Security.Cryptography.Pkcs` 10.0.0 (llega por MailKit → MimeKit).
+- [ ] 2FA con app autenticadora (en pausa).
 - [x] Crear `.env` y `.env.example` en la raíz.
 - [ ] Dockerizar: `Dockerfile` y `docker-compose.yml` que lean el `.env`.
