@@ -100,9 +100,16 @@ La contraseña de PostgreSQL se dejó en `appsettings.Development.json` porque e
 ## 5. ApplicationUser
 
 ```csharp
-public class ApplicationUser : IdentityUser
+public sealed class ApplicationUser : IdentityUser
 {
+    [MaxLength(100)]
     public string? FullName { get; set; }
+
+    public ApplicationUser(string? fullName, string userName, string email) : base(userName)
+    {
+        Email = email;
+        FullName = fullName;
+    }
 }
 ```
 
@@ -121,6 +128,78 @@ public class ApplicationUser : IdentityUser
 | `EmailConfirmed`, `PhoneNumberConfirmed` | Confirmaciones |
 | `LockoutEnabled`, `LockoutEnd`, `AccessFailedCount` | Bloqueo por intentos fallidos |
 | `TwoFactorEnabled` | 2FA |
+
+### ¿Qué exige Identity para crear un usuario?
+
+**Solo el `UserName`**: obligatorio, único y con caracteres permitidos (letras y números ASCII y `-._@+`).
+
+| Dato | ¿Obligatorio? |
+|---|---|
+| `UserName` | ✅ Siempre |
+| Contraseña | Depende del método: `CreateAsync(user, password)` la exige y la valida; **`CreateAsync(user)` crea el usuario sin contraseña** (`PasswordHash = null`) |
+| `Email` | ❌ Opcional por defecto. Con `options.User.RequireUniqueEmail = true` pasa a ser **obligatorio, válido y único** |
+| `Id`, `Normalized*`, `SecurityStamp`, `ConcurrencyStamp` | Los genera Identity |
+| `FullName` | Es tuyo: obligatorio u opcional según lo declares (`string` o `string?`) |
+
+**Usuarios sin contraseña:** no pueden entrar con `PasswordSignInAsync` (devuelve `Failed`). Sirven para el login con terceros, para invitaciones (el usuario elige la contraseña después) y para el login sin contraseña.
+
+| Método | Para qué |
+|---|---|
+| `HasPasswordAsync(user)` | ¿Tiene contraseña? |
+| `AddPasswordAsync(user, password)` | Ponerle una contraseña a quien no tiene (falla si ya tiene) |
+| `ChangePasswordAsync(user, actual, nueva)` | Cambiarla conociendo la actual |
+| `RemovePasswordAsync(user)` | Quitarla |
+
+### El constructor
+
+**¿Por qué el email no va en `base(...)`?** `base(...)` no sirve para "pasarle datos al padre" en general: **llama a un constructor que ya existe en `IdentityUser`**, y solo hay dos:
+
+```csharp
+public IdentityUser() { }
+public IdentityUser(string userName) { }
+```
+
+`: base(userName, email)` **no compila** (`CS1729: does not contain a constructor that takes 2 arguments`).
+
+| Dato | ¿Existe la propiedad en `IdentityUser`? | ¿Hay un constructor del padre que la reciba? | Cómo se asigna |
+|---|---|---|---|
+| `UserName` | ✅ | ✅ | `: base(userName)` |
+| `Email` | ✅ (heredada) | ❌ | `Email = email;` en el cuerpo |
+| `FullName` | ❌ (es tuya) | ❌ | Se declara **y** se asigna |
+
+**Heredar la propiedad ≠ recibir el valor.** La herencia da "la caja vacía"; el valor de cada usuario viene del formulario y alguien tiene que meterlo.
+
+**¿Constructor o inicializador `{ }`?** Es una decisión de diseño:
+
+| | Constructor | Inicializador `{ }` |
+|---|---|---|
+| ¿Se puede olvidar un dato? | ❌ El compilador lo exige | ✅ Sí, y no avisa |
+| Flexibilidad | Menos | Más |
+
+Se pueden **combinar**: `new ApplicationUser(...) { EmailConfirmed = true }`.
+
+**EF Core y los constructores con parámetros:** EF puede usarlos si **los nombres de los parámetros coinciden con propiedades** (`userName` → `UserName`). Se comprueba con `dotnet ef migrations has-pending-model-changes`, que construye el modelo.
+
+⚠️ **Cuidado con varios parámetros del mismo tipo.** Al cambiar el orden del constructor a `(fullName, userName, email)`, la llamada vieja `new ApplicationUser(model.UserName, model.Email, model.FullName)` **siguió compilando** (los tres son `string`), pero mezclaba los datos. La defensa son los **argumentos con nombre**:
+
+```csharp
+new ApplicationUser(fullName: model.FullName, userName: model.UserName, email: model.Email);
+```
+
+### Avisos de Rider
+
+**"Possible performance issues caused by unlimited string length"** (en `FullName`):
+- Un `string` sin límite se convierte en una columna sin tamaño máximo (`text`).
+- El aviso piensa en **SQL Server**, donde `nvarchar(max)` es más lento y no se puede indexar. **En PostgreSQL, `text` y `varchar(n)` rinden igual.**
+- Aun así conviene limitarlo, por **integridad de datos**: el formulario limita a 100, pero la base aceptaba cualquier longitud.
+- **`[MaxLength(100)]`** en la entidad (EF lo usa para el tamaño de la columna); **`[StringLength]`** en los ViewModels (valida formularios).
+- Cambia el tipo de la columna, así que **necesita una migración** (`AlterColumn` en lugar de `CreateTable`).
+
+**"Virtual member call in constructor"** (en `Email = email;`):
+- `Email` es **`virtual`** en `IdentityUser`: una clase hija podría redefinirla con `override`.
+- El constructor del padre se ejecuta **antes** que el de la hija. Si una hija redefiniera `Email` usando sus propios campos, se ejecutaría su código **antes de que la hija esté inicializada** (por ejemplo, un `_log` que todavía es `null`).
+- **Solución: `sealed`**, para que nadie pueda heredar de `ApplicationUser`.
+- ⚠️ `sealed` es incompatible con el **lazy loading con proxies** de EF Core, que crea clases hijas de las entidades. No se usa en este proyecto.
 
 ---
 
@@ -314,6 +393,7 @@ POST /Account/Register  → valida → crea usuario → inicia sesión → redir
 | `[EmailAddress]` | Formato de email. Genera `type="email"` |
 | `[StringLength(100)]` | Longitud máxima |
 | `[Compare(nameof(Password))]` | Debe ser igual a otra propiedad. `nameof` es más seguro que escribir el nombre como texto |
+| `[RegularExpression(@"^[a-zA-Z0-9._-]+$")]` | Debe cumplir una expresión regular: de principio (`^`) a fin (`$`), uno o más (`+`) caracteres de la lista |
 | `[DataType(DataType.Password)]` | Genera `type="password"` |
 | `[Display(Name = "...")]` | Texto de la etiqueta |
 
@@ -337,7 +417,18 @@ Los entrega ASP.NET Core por inyección de dependencias, gracias a `AddIdentity`
 - **`[HttpPost]`**: el método solo responde a envíos de formulario.
 - **`[ValidateAntiForgeryToken]`**: protege contra **CSRF** (otro sitio enviando formularios con la sesión del usuario). El token lo agrega el tag helper `<form>`.
 - **`if (!ModelState.IsValid) return View(model);`**: se devuelve el `model` para que el usuario no pierda lo que escribió.
-- **`UserName = model.Email`**: Identity exige `UserName`, y usar el email simplifica el login.
+- **El username lo elige el usuario.** Al principio se usaba `UserName = model.Email`; después se agregó un campo `UserName` al formulario:
+  ```csharp
+  [Required]
+  [StringLength(50, MinimumLength = 3)]
+  [RegularExpression(@"^[a-zA-Z0-9._-]+$", ErrorMessage = "...")]
+  [Display(Name = "Username")]
+  public string UserName { get; set; } = string.Empty;
+  ```
+  - **Sin `@`**: como el login acepta email o username, un username con `@` se buscaría como email y nunca podría entrar.
+  - Son **los mismos caracteres** que usa `GenerateUniqueUserNameAsync` para los usuarios de Google.
+  - ⚠️ Al separar `UserName` de `Email` **se rompió el login con email**: ver [sección 11](#11-login).
+  - `autocomplete="username"` en el campo de username y `autocomplete="email"` en el de email.
 - **`_userManager.CreateAsync(user, password)`**:
   1. Valida el usuario (`UserName` único y caracteres permitidos).
   2. Valida la contraseña. Por defecto: mínimo 6 caracteres, mayúscula, minúscula, dígito y símbolo.
@@ -387,7 +478,15 @@ Los entrega ASP.NET Core por inyección de dependencias, gracias a `AddIdentity`
 
 ### ViewModel
 
-`Email`, `Password` y `RememberMe` (un `bool` que se convierte en checkbox).
+`EmailOrUserName`, `Password` y `RememberMe` (un `bool` que se convierte en checkbox).
+
+```csharp
+[Required]
+[Display(Name = "Email or username")]
+public string EmailOrUserName { get; set; } = string.Empty;
+```
+
+Sin `[EmailAddress]`, porque un username no tiene formato de email. Al principio el campo se llamaba `Email`.
 
 ### Acciones
 
@@ -406,8 +505,18 @@ public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl =
     ViewData["ReturnUrl"] = returnUrl;
     if (!ModelState.IsValid) return View(model);
 
+    var user = model.EmailOrUserName.Contains('@')
+        ? await _userManager.FindByEmailAsync(model.EmailOrUserName)
+        : await _userManager.FindByNameAsync(model.EmailOrUserName);
+
+    if (user is null)
+    {
+        ModelState.AddModelError(string.Empty, "Invalid login attempt. If you just registered, make sure you have confirmed your email.");
+        return View(model);
+    }
+
     var result = await _signInManager.PasswordSignInAsync(
-        model.Email, model.Password, model.RememberMe, lockoutOnFailure: true);
+        user, model.Password, model.RememberMe, lockoutOnFailure: true);
 
     if (result.Succeeded)
     {
@@ -417,21 +526,45 @@ public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl =
 
     if (result.IsLockedOut) { /* "This account is locked out..." */ }
 
-    ModelState.AddModelError(string.Empty, "Invalid login attempt.");   // ver sección 13: ahora incluye una pista
+    ModelState.AddModelError(string.Empty, "Invalid login attempt. If you just registered, make sure you have confirmed your email.");
     return View(model);
 }
 ```
 
+### Iniciar sesión con email **o** username
+
+**El problema:** la sobrecarga `PasswordSignInAsync(string userName, ...)` busca por **`UserName`**. Funcionaba con el email solo porque al principio `UserName = Email`. Al pedir un username en el registro, **los usuarios nuevos ya no podían entrar con su email**.
+
+**La solución:** buscar primero al usuario y usar la sobrecarga que recibe **el usuario**:
+
+```
+"ana@gmail.com" → tiene @ → FindByEmailAsync ┐
+"ana23"         → sin @   → FindByNameAsync  ┴→ PasswordSignInAsync(user, password, ...)
+```
+
+- **`? :`** es el **operador ternario**: `condición ? siEsVerdad : siEsFalso`.
+- **Si el usuario no existe, el mensaje es exactamente el mismo** que el de una contraseña incorrecta (regla de la misma respuesta).
+- El username **no puede tener `@`** (`[RegularExpression]` en el registro). Si no, se buscaría como email.
+- **`options.User.RequireUniqueEmail = true`**: si se entra con el email, no puede haber dos usuarios con el mismo. Además, **`FindByEmailAsync` lanza una excepción si encuentra más de uno**. Antes de activarlo se comprueba que no haya duplicados:
+  ```sql
+  SELECT "NormalizedEmail", COUNT(*) FROM "AspNetUsers" GROUP BY "NormalizedEmail" HAVING COUNT(*) > 1;
+  ```
+- El commit fue un **`fix:`**: corrige algo que estaba roto.
+
 ### `PasswordSignInAsync`
+
+| Sobrecarga | 1.er parámetro |
+|---|---|
+| `PasswordSignInAsync(string userName, ...)` | Un texto que se busca como **`UserName`** |
+| `PasswordSignInAsync(TUser user, ...)` ✅ (la que se usa) | El **usuario** ya encontrado |
 
 | Parámetro | Significado |
 |---|---|
-| 1º | Es el **`UserName`**. Funciona con el email porque `UserName = Email` |
-| 2º | Contraseña. Identity la hashea con la misma sal y **compara los hashes**. No descifra nada |
-| 3º | `isPersistent` (`RememberMe`) |
+| `password` | Identity la hashea con la misma sal y **compara los hashes**. No descifra nada |
+| `isPersistent` | `RememberMe` |
 | `lockoutOnFailure` | Cuenta los fallos y bloquea la cuenta |
 
-Busca el usuario, verifica la contraseña, comprueba el bloqueo y crea la cookie.
+Verifica la contraseña, comprueba la confirmación y el bloqueo, y crea la cookie.
 
 ### `SignInResult`
 
@@ -455,7 +588,7 @@ Por defecto, **5 intentos fallidos bloquean la cuenta 5 minutos**. `AccessFailed
 
 ### Seguridad
 
-- **Mensaje genérico** "Invalid login attempt.", tanto si el email no existe como si la contraseña es incorrecta. Evita la **enumeración de usuarios**. Con la confirmación de correo, este mismo mensaje cubre también `IsNotAllowed` ([sección 13](#13-confirmación-de-correo)).
+- **Mensaje genérico** "Invalid login attempt…", tanto si el usuario no existe como si la contraseña es incorrecta. Evita la **enumeración de usuarios**. Con la confirmación de correo, este mismo mensaje cubre también `IsNotAllowed` ([sección 13](#13-confirmación-de-correo)).
 - **`Url.IsLocalUrl(returnUrl)`** evita el **open redirect**. Sin esta comprobación, `?returnUrl=https://sitio-falso.com` mandaría al usuario a un sitio falso justo después de iniciar sesión en el real.
 - `IsLocalUrl` tiene `[NotNullWhen(true)]`, por eso `Redirect(returnUrl)` no da advertencia de *nullable*.
 
@@ -1314,6 +1447,8 @@ ORDER BY u."Email";
 | `chore:` | Preparar el entorno: plantilla, paquetes, configuración |
 | `feat:` | Funcionalidad o código propio del proyecto |
 | `docs:` | Cambios que solo afectan a la documentación |
+| `fix:` | Corrige algo que estaba roto |
+| `style:` | Cambios visuales o de formato que no alteran el comportamiento |
 
 - **Primera línea**: corta (unos 50 caracteres), en imperativo ("add", no "added").
 - **Cuerpo**: lista de qué incluye el commit.
@@ -1345,6 +1480,9 @@ ORDER BY u."Email";
 14. `feat: ask for username on registration`
 15. `docs: document Google sign-in setup`
 16. `feat: add Google sign-in`
+17. `style: redesign login view and add Google sign-in button`
+18. `docs: add Google sign-in notes`
+19. `fix: allow login with email or username`
 
 ---
 
@@ -1388,12 +1526,14 @@ dotnet run --project src/IdentityLab.Mvc
 - [ ] (Opcional) Manejar un `code` que no sea Base64Url válido en `ConfirmEmail`.
 - [x] Reset de contraseña (reutiliza `IEmailSender`, con `GeneratePasswordResetTokenAsync`).
 - [ ] (Opcional) Enviar los correos en segundo plano, para evitar la fuga por tiempo de respuesta.
-- [ ] Ajustar las opciones de Identity: reglas de contraseña y `RequireUniqueEmail`.
+- [x] `RequireUniqueEmail`.
+- [ ] Ajustar las reglas de contraseña (`options.Password`).
+- [ ] ⚠️ **Crear y aplicar la migración de `[MaxLength(100)]` en `FullName`** (`AddFullNameMaxLength`). El atributo está en el código, pero la migración no existe: `dotnet ef migrations has-pending-model-changes` lo confirma.
 - [ ] `ConfigureApplicationCookie`, después de `AddIdentity`.
 - [ ] Proteger páginas con `[Authorize]`.
 - [ ] Etapa 3: `IdentityLab.Api` con `AddIdentityCore` + JWT.
 - [x] **Login con Google**: `AddGoogle`, `ExternalLogin`, `ExternalLoginCallback` y botón en Login y Register.
-- [ ] ⚠️ **Login con email**: los usuarios nuevos tienen un `UserName` distinto de su email, y `PasswordSignInAsync(model.Email, ...)` busca por `UserName`. Decidir: entrar con email, con username o con cualquiera de los dos.
+- [x] **Login con email o username** (`FindByEmailAsync` / `FindByNameAsync` + `PasswordSignInAsync(user, ...)`).
 - [ ] Vincular un proveedor externo a una cuenta existente desde "Mi cuenta" (con la sesión iniciada).
 - [ ] Permitir que el usuario cambie el username generado.
 - [ ] Manejar la cancelación en la pantalla de Google (hoy da error 500).
