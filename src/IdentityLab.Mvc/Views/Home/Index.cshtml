@@ -7,7 +7,7 @@
 
 <section class="container hero" aria-labelledby="hero-title">
     <p class="hero-badge">
-        @await Html.PartialAsync("_Icon", "shield")
+        <partial name="_Icon" model='"shield"' />
         ASP.NET Core Identity · .NET 10
     </p>
 
@@ -24,13 +24,13 @@
         @if (isAuthenticated)
         {
             <a asp-controller="Manage" asp-action="Index" class="btn btn-primary btn-lg">
-                Go to my account @await Html.PartialAsync("_Icon", "arrow-right")
+                Go to my account <partial name="_Icon" model='"arrow-right"' />
             </a>
         }
         else
         {
             <a asp-controller="Account" asp-action="Register" class="btn btn-primary btn-lg">
-                Create account @await Html.PartialAsync("_Icon", "arrow-right")
+                Create account <partial name="_Icon" model='"arrow-right"' />
             </a>
             <a asp-controller="Account" asp-action="Login" class="btn btn-outline-secondary btn-lg">Log in</a>
         }
@@ -56,37 +56,37 @@
 
     <div class="feature-grid">
         <article class="surface feature-card">
-            <span class="feature-icon">@await Html.PartialAsync("_Icon", "user")</span>
+            <span class="feature-icon"><partial name="_Icon" model='"user"' /></span>
             <h3 class="feature-title">Registration and login</h3>
             <p class="feature-text">Sign up with a username, log in with your email or username, and get locked out after too many failed attempts.</p>
         </article>
 
         <article class="surface feature-card">
-            <span class="feature-icon">@await Html.PartialAsync("_Icon", "mail")</span>
+            <span class="feature-icon"><partial name="_Icon" model='"mail"' /></span>
             <h3 class="feature-title">Email confirmation</h3>
             <p class="feature-text">A signed, time-limited link is emailed before the first sign-in, sent with MailKit over SMTP.</p>
         </article>
 
         <article class="surface feature-card">
-            <span class="feature-icon">@await Html.PartialAsync("_Icon", "lock")</span>
+            <span class="feature-icon"><partial name="_Icon" model='"lock"' /></span>
             <h3 class="feature-title">Password reset</h3>
             <p class="feature-text">Single-use reset links that never reveal whether an account exists.</p>
         </article>
 
         <article class="surface feature-card">
-            <span class="feature-icon">@await Html.PartialAsync("_Icon", "google")</span>
+            <span class="feature-icon"><partial name="_Icon" model='"google"' /></span>
             <h3 class="feature-title">Sign in with Google</h3>
             <p class="feature-text">OAuth 2.0 and OpenID Connect, with safe account creation and no automatic account linking.</p>
         </article>
 
         <article class="surface feature-card">
-            <span class="feature-icon">@await Html.PartialAsync("_Icon", "smartphone")</span>
+            <span class="feature-icon"><partial name="_Icon" model='"smartphone"' /></span>
             <h3 class="feature-title">Two-factor authentication</h3>
             <p class="feature-text">Time-based codes from an authenticator app, set up with a QR code generated on the server.</p>
         </article>
 
         <article class="surface feature-card">
-            <span class="feature-icon">@await Html.PartialAsync("_Icon", "key")</span>
+            <span class="feature-icon"><partial name="_Icon" model='"key"' /></span>
             <h3 class="feature-title">Recovery codes</h3>
             <p class="feature-text">Ten one-time backup codes to get back in if you lose your phone.</p>
         </article>

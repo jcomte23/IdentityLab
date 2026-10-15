@@ -8,7 +8,7 @@
 @if (Model)
 {
     <header class="auth-header">
-        <span class="icon-badge icon-badge--success">@await Html.PartialAsync("_Icon", "check-circle")</span>
+        <span class="icon-badge icon-badge--success"><partial name="_Icon" model='"check-circle"' /></span>
         <h1 id="page-title" class="auth-title">Email confirmed</h1>
         <p class="auth-subtitle">Thank you for confirming your email. You can now log in.</p>
     </header>
@@ -18,7 +18,7 @@
 else
 {
     <header class="auth-header">
-        <span class="icon-badge icon-badge--danger">@await Html.PartialAsync("_Icon", "x-circle")</span>
+        <span class="icon-badge icon-badge--danger"><partial name="_Icon" model='"x-circle"' /></span>
         <h1 id="page-title" class="auth-title">We couldn't confirm your email</h1>
         <p class="auth-subtitle">The link may be invalid or expired.</p>
     </header>

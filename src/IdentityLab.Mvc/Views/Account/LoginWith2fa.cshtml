@@ -6,7 +6,7 @@
 }
 
 <header class="auth-header">
-    <span class="icon-badge">@await Html.PartialAsync("_Icon", "smartphone")</span>
+    <span class="icon-badge"><partial name="_Icon" model='"smartphone"' /></span>
     <h1 id="page-title" class="auth-title">Two-factor authentication</h1>
     <p class="auth-subtitle">Open your authenticator app and enter the 6-digit code.</p>
 </header>

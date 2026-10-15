@@ -7,7 +7,7 @@
 
 <div class="container container-narrow">
     <section class="surface panel text-center" aria-labelledby="page-title">
-        <span class="icon-badge icon-badge--danger mb-3">@await Html.PartialAsync("_Icon", "x-circle")</span>
+        <span class="icon-badge icon-badge--danger mb-3"><partial name="_Icon" model='"x-circle"' /></span>
         <h1 id="page-title" class="panel-title">Something went wrong</h1>
         <p class="panel-subtitle">An error occurred while processing your request. Please try again.</p>
 

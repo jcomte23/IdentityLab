@@ -64,7 +64,7 @@
 
     <ul class="settings-list">
         <li class="settings-item">
-            <span class="settings-item__icon">@await Html.PartialAsync("_Icon", "lock")</span>
+            <span class="settings-item__icon"><partial name="_Icon" model='"lock"' /></span>
             <div>
                 <h3 class="settings-item__title">Password</h3>
                 <p class="settings-item__text">
@@ -86,7 +86,7 @@
         </li>
 
         <li class="settings-item">
-            <span class="settings-item__icon">@await Html.PartialAsync("_Icon", "smartphone")</span>
+            <span class="settings-item__icon"><partial name="_Icon" model='"smartphone"' /></span>
             <div>
                 <h3 class="settings-item__title">Two-factor authentication</h3>
                 <p class="settings-item__text">Add an extra layer of security with an authenticator app.</p>
@@ -113,7 +113,7 @@
             var isRunningLow = Model.RecoveryCodesLeft <= 3;
 
             <li class="settings-item">
-                <span class="settings-item__icon">@await Html.PartialAsync("_Icon", "key")</span>
+                <span class="settings-item__icon"><partial name="_Icon" model='"key"' /></span>
                 <div>
                     <h3 class="settings-item__title">Recovery codes</h3>
                     <p class="settings-item__text">One-time codes to log in if you lose access to your authenticator app.</p>
@@ -137,7 +137,7 @@
         }
 
         <li class="settings-item">
-            <span class="settings-item__icon">@await Html.PartialAsync("_Icon", "link")</span>
+            <span class="settings-item__icon"><partial name="_Icon" model='"link"' /></span>
             <div>
                 <h3 class="settings-item__title">Linked logins</h3>
                 <p class="settings-item__text">External accounts you can use to log in.</p>
@@ -158,7 +158,7 @@
 
 <section class="surface settings-card settings-card--danger" aria-labelledby="danger-title">
     <div class="settings-item">
-        <span class="settings-item__icon settings-item__icon--danger">@await Html.PartialAsync("_Icon", "trash")</span>
+        <span class="settings-item__icon settings-item__icon--danger"><partial name="_Icon" model='"trash"' /></span>
         <div>
             <h2 id="danger-title" class="settings-item__title">Delete account</h2>
             <p class="settings-item__text">Permanently delete your account and all its data. This can't be undone.</p>

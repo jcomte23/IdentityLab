@@ -7,7 +7,7 @@
 
 <section class="surface panel" aria-labelledby="page-title">
     <header class="panel-header">
-        <span class="icon-badge">@await Html.PartialAsync("_Icon", "smartphone")</span>
+        <span class="icon-badge"><partial name="_Icon" model='"smartphone"' /></span>
         <div>
             <h1 id="page-title" class="panel-title">Set up authenticator app</h1>
             <p class="panel-subtitle">Use an authenticator app to generate one-time login codes.</p>
@@ -58,7 +58,7 @@
     </ol>
 
     <p class="callout callout--warning mt-4">
-        @await Html.PartialAsync("_Icon", "alert")
+        <partial name="_Icon" model='"alert"' />
         <span>Keep this key private. Anyone who has it can generate your login codes.</span>
     </p>
 </section>

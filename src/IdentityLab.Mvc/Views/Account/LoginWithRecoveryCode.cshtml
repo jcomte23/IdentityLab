@@ -6,7 +6,7 @@
 }
 
 <header class="auth-header">
-    <span class="icon-badge icon-badge--warning">@await Html.PartialAsync("_Icon", "key")</span>
+    <span class="icon-badge icon-badge--warning"><partial name="_Icon" model='"key"' /></span>
     <h1 id="page-title" class="auth-title">Use a recovery code</h1>
     <p class="auth-subtitle">Enter one of the codes you saved when you enabled two-factor authentication.</p>
 </header>

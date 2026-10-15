@@ -7,7 +7,7 @@
 
 <section class="surface panel" aria-labelledby="page-title">
     <header class="panel-header">
-        <span class="icon-badge icon-badge--warning">@await Html.PartialAsync("_Icon", "key")</span>
+        <span class="icon-badge icon-badge--warning"><partial name="_Icon" model='"key"' /></span>
         <div>
             <h1 id="page-title" class="panel-title">Your recovery codes</h1>
             <p class="panel-subtitle">Use one of these if you lose access to your authenticator app.</p>
@@ -15,7 +15,7 @@
     </header>
 
     <p class="callout callout--warning" role="note">
-        @await Html.PartialAsync("_Icon", "alert")
+        <partial name="_Icon" model='"alert"' />
         <span>
             <strong>Save these codes now.</strong> This is the only time they will be shown.
             Each code works only once. Store them somewhere safe, like a password manager.

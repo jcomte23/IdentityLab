@@ -4,13 +4,13 @@
 }
 
 <header class="auth-header">
-    <span class="icon-badge icon-badge--success">@await Html.PartialAsync("_Icon", "mail")</span>
+    <span class="icon-badge icon-badge--success"><partial name="_Icon" model='"mail"' /></span>
     <h1 id="page-title" class="auth-title">Check your email</h1>
     <p class="auth-subtitle">Your account has been created. We've sent you a link to confirm your email address.</p>
 </header>
 
 <aside class="callout" aria-labelledby="email-help-title">
-    @await Html.PartialAsync("_Icon", "info")
+    <partial name="_Icon" model='"info"' />
     <div>
         <h2 id="email-help-title" class="callout-title">Didn't get the email?</h2>
         <ul>

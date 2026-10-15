@@ -7,7 +7,7 @@
 
 <section class="surface panel panel--danger" aria-labelledby="page-title">
     <header class="panel-header">
-        <span class="icon-badge icon-badge--danger">@await Html.PartialAsync("_Icon", "trash")</span>
+        <span class="icon-badge icon-badge--danger"><partial name="_Icon" model='"trash"' /></span>
         <div>
             <h1 id="page-title" class="panel-title">Delete account</h1>
             <p class="panel-subtitle">This action is permanent and can't be undone.</p>
@@ -15,7 +15,7 @@
     </header>
 
     <aside class="callout callout--danger" aria-labelledby="delete-warning-title">
-        @await Html.PartialAsync("_Icon", "alert")
+        <partial name="_Icon" model='"alert"' />
         <div>
             <h2 id="delete-warning-title" class="callout-title">This will permanently delete:</h2>
             <ul>

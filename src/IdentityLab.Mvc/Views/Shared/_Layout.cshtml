@@ -62,8 +62,8 @@
 <header class="site-header">
     <nav class="navbar navbar-expand-md" aria-label="Main navigation">
         <div class="container">
-            <a class="brand me-md-4" asp-area="" asp-controller="Home" asp-action="Index">
-                <span class="brand-mark">@await Html.PartialAsync("_Icon", "shield")</span>
+            <a class="brand me-md-4" asp-controller="Home" asp-action="Index">
+                <span class="brand-mark"><partial name="_Icon" model='"shield"' /></span>
                 <span>@siteName</span>
             </a>
 
@@ -76,11 +76,11 @@
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
                         <a class="nav-link @(isHome ? "active" : null)" aria-current="@(isHome ? "page" : null)"
-                           asp-area="" asp-controller="Home" asp-action="Index">Home</a>
+                           asp-controller="Home" asp-action="Index">Home</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link @(isPrivacy ? "active" : null)" aria-current="@(isPrivacy ? "page" : null)"
-                           asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+                           asp-controller="Home" asp-action="Privacy">Privacy</a>
                     </li>
                 </ul>
 
@@ -97,16 +97,16 @@
                                 <li><span class="dropdown-header">Signed in as <strong class="text-body">@userName</strong></span></li>
                                 <li><hr class="dropdown-divider" /></li>
                                 <li>
-                                    <a class="dropdown-item" asp-area="" asp-controller="Manage" asp-action="Index">
-                                        @await Html.PartialAsync("_Icon", "user")
+                                    <a class="dropdown-item" asp-controller="Manage" asp-action="Index">
+                                        <partial name="_Icon" model='"user"' />
                                         My account
                                     </a>
                                 </li>
                                 <li><hr class="dropdown-divider" /></li>
                                 <li>
-                                    <form asp-area="" asp-controller="Account" asp-action="Logout" method="post">
+                                    <form asp-controller="Account" asp-action="Logout" method="post">
                                         <button type="submit" class="dropdown-item dropdown-item--danger">
-                                            @await Html.PartialAsync("_Icon", "log-out")
+                                            <partial name="_Icon" model='"log-out"' />
                                             Log out
                                         </button>
                                     </form>
@@ -118,10 +118,10 @@
                     {
                         <li class="nav-item">
                             <a class="nav-link @(isLogin ? "active" : null)" aria-current="@(isLogin ? "page" : null)"
-                               asp-area="" asp-controller="Account" asp-action="Login">Log in</a>
+                               asp-controller="Account" asp-action="Login">Log in</a>
                         </li>
                         <li class="nav-item">
-                            <a class="btn btn-primary btn-sm px-3" asp-area="" asp-controller="Account" asp-action="Register">Create account</a>
+                            <a class="btn btn-primary btn-sm px-3" asp-controller="Account" asp-action="Register">Create account</a>
                         </li>
                     }
                 </ul>
@@ -137,22 +137,22 @@
 <footer class="site-footer">
     <div class="container site-footer__inner">
         <p class="site-footer__brand">
-            <span class="brand-mark brand-mark--sm">@await Html.PartialAsync("_Icon", "shield")</span>
+            <span class="brand-mark brand-mark--sm"><partial name="_Icon" model='"shield"' /></span>
             <span><strong>@siteName</strong> · A hands-on ASP.NET Core Identity lab</span>
         </p>
 
         <nav aria-label="Footer">
             <ul class="footer-links">
-                <li><a asp-area="" asp-controller="Home" asp-action="Index">Home</a></li>
-                <li><a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a></li>
+                <li><a asp-controller="Home" asp-action="Index">Home</a></li>
+                <li><a asp-controller="Home" asp-action="Privacy">Privacy</a></li>
                 @if (isAuthenticated)
                 {
-                    <li><a asp-area="" asp-controller="Manage" asp-action="Index">My account</a></li>
+                    <li><a asp-controller="Manage" asp-action="Index">My account</a></li>
                 }
                 else
                 {
-                    <li><a asp-area="" asp-controller="Account" asp-action="Login">Log in</a></li>
-                    <li><a asp-area="" asp-controller="Account" asp-action="Register">Create account</a></li>
+                    <li><a asp-controller="Account" asp-action="Login">Log in</a></li>
+                    <li><a asp-controller="Account" asp-action="Register">Create account</a></li>
                 }
             </ul>
         </nav>
