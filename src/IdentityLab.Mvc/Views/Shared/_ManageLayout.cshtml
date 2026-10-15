@@ -1,0 +1,29 @@
+@*
+    Layout for the account pages (ManageController, only for signed-in users).
+    Adds a breadcrumb on sub-pages and the one-time status message.
+*@
+@{
+    Layout = "_Layout";
+    ViewData["Robots"] ??= "noindex, nofollow";
+    var isOverview = ViewContext.RouteData.Values["action"]?.ToString() == "Index";
+}
+
+<div class="container container-narrow">
+    @if (!isOverview)
+    {
+        <nav aria-label="Breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a asp-controller="Manage" asp-action="Index">My account</a></li>
+                <li class="breadcrumb-item active" aria-current="page">@ViewData["Title"]</li>
+            </ol>
+        </nav>
+    }
+
+    <partial name="_StatusMessage" />
+
+    @RenderBody()
+</div>
+
+@section Scripts {
+    @await RenderSectionAsync("Scripts", required: false)
+}

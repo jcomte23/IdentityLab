@@ -1,0 +1,21 @@
+@*
+    Layout for the authentication pages (login, register, password reset, 2FA...).
+    Renders the view inside a centered card. Views can set:
+      ViewData["AuthCardClass"] = "auth-card--wide"   wider card (register)
+      ViewData["Robots"] = "index, follow"            to allow search engines (default: noindex)
+*@
+@{
+    Layout = "_Layout";
+    ViewData["MainClass"] = "site-main site-main--decorated";
+    ViewData["Robots"] ??= "noindex, nofollow";
+}
+
+<div class="container">
+    <section class="surface surface--raised auth-card @ViewData["AuthCardClass"]" aria-labelledby="page-title">
+        @RenderBody()
+    </section>
+</div>
+
+@section Scripts {
+    @await RenderSectionAsync("Scripts", required: false)
+}

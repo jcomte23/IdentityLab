@@ -1,0 +1,8 @@
+@* "Continue with Google" button, shared by Login and Register. Keeps the returnUrl when there is one. *@
+<form asp-controller="Account" asp-action="ExternalLogin" asp-route-provider="Google"
+      asp-route-returnUrl="@ViewData["ReturnUrl"]" method="post">
+    <button type="submit" class="btn btn-outline-secondary btn-lg btn-social w-100">
+        @await Html.PartialAsync("_Icon", "google")
+        <span>Continue with Google</span>
+    </button>
+</form>
