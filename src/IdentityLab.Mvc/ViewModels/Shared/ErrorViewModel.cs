@@ -1,4 +1,4 @@
-namespace IdentityLab.Mvc.Models;
+namespace IdentityLab.Mvc.ViewModels.Shared;
 
 public class ErrorViewModel
 {

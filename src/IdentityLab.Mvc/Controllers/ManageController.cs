@@ -1,4 +1,5 @@
 using IdentityLab.Mvc.Models;
+using IdentityLab.Mvc.ViewModels.Manage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -173,7 +174,11 @@ public class ManageController : Controller
             return RedirectToAction("Login", "Account");
         }
 
-        return View(new DeleteAccountViewModel { RequirePassword = await _userManager.HasPasswordAsync(user) });
+        return View(new DeleteAccountViewModel
+        {
+            RequirePassword = await _userManager.HasPasswordAsync(user),
+            UserName = user.UserName ?? string.Empty
+        });
     }
 
     [HttpPost]
@@ -188,6 +193,7 @@ public class ManageController : Controller
 
         // Never trust the form for this: check it again on the server.
         model.RequirePassword = await _userManager.HasPasswordAsync(user);
+        model.UserName = user.UserName ?? string.Empty;
 
         if (model.RequirePassword &&
             (string.IsNullOrEmpty(model.Password) || !await _userManager.CheckPasswordAsync(user, model.Password)))

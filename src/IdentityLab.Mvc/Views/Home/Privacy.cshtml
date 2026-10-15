@@ -1,6 +1,62 @@
 ﻿@{
-    ViewData["Title"] = "Privacy Policy";
+    ViewData["Title"] = "Privacy";
+    ViewData["Description"] = "What data IdentityLab stores, which cookies it uses and how you can delete your account.";
 }
-<h1>@ViewData["Title"]</h1>
 
-<p>Use this page to detail your site's privacy policy.</p>
+<div class="container container-narrow">
+    <article class="surface panel prose" aria-labelledby="page-title">
+        <header>
+            <h1 id="page-title" class="panel-title">Privacy</h1>
+            <p class="panel-subtitle">What IdentityLab stores about you and why.</p>
+        </header>
+
+        <p class="callout callout--info mt-4">
+            @await Html.PartialAsync("_Icon", "info")
+            <span>IdentityLab is a learning project. Please don't use it to store real personal data.</span>
+        </p>
+
+        <section aria-labelledby="data-title">
+            <h2 id="data-title">What we store</h2>
+            <ul>
+                <li>Your username, your email address and, if you add it, your full name.</li>
+                <li>A hash of your password. The password itself is never stored.</li>
+                <li>Security data: whether your email is confirmed, failed login attempts, lockouts and your two-factor settings, including your authenticator key and recovery codes.</li>
+                <li>If you continue with Google, the link between your account and your Google account identifier.</li>
+            </ul>
+        </section>
+
+        <section aria-labelledby="cookies-title">
+            <h2 id="cookies-title">Cookies</h2>
+            <p>IdentityLab only uses cookies it needs to work. There are no analytics or advertising cookies.</p>
+            <ul>
+                <li>A session cookie that keeps you signed in.</li>
+                <li>Short-lived cookies used during Google sign-in and during the second step of two-factor login.</li>
+                <li>An optional cookie when you choose "Remember this device".</li>
+                <li>A cookie that protects forms against cross-site request forgery.</li>
+                <li>A cookie that shows one-time messages after an action.</li>
+            </ul>
+        </section>
+
+        <section aria-labelledby="email-title">
+            <h2 id="email-title">Emails</h2>
+            <p>We only email you to confirm your address and to reset your password.</p>
+        </section>
+
+        <section aria-labelledby="google-title">
+            <h2 id="google-title">Sign in with Google</h2>
+            <p>
+                Google shares your account identifier, email address and name with IdentityLab.
+                We never see your Google password, and we don't store Google access tokens.
+            </p>
+        </section>
+
+        <section aria-labelledby="choices-title">
+            <h2 id="choices-title">Your choices</h2>
+            <p class="mb-0">
+                From <a asp-controller="Manage" asp-action="Index">My account</a> you can turn two-factor authentication
+                on or off, generate new recovery codes and delete your account. Deleting your account permanently
+                removes all the data listed above.
+            </p>
+        </section>
+    </article>
+</div>

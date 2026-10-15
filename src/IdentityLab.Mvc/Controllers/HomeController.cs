@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using IdentityLab.Mvc.Models;
-using IdentityLab.Mvc.Services;
+using IdentityLab.Mvc.ViewModels.Shared;
 
 namespace IdentityLab.Mvc.Controllers;
 

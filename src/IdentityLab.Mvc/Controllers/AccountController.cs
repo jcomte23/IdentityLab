@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using IdentityLab.Mvc.Models;
 using IdentityLab.Mvc.Services;
+using IdentityLab.Mvc.ViewModels.Account;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;

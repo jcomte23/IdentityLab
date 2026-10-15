@@ -1,4 +1,4 @@
-namespace IdentityLab.Mvc.Models;
+namespace IdentityLab.Mvc.ViewModels.Manage;
 
 public class ManageIndexViewModel
 {

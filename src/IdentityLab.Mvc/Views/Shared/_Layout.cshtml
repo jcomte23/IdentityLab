@@ -1,71 +1,114 @@
-﻿<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>@ViewData["Title"] - IdentityLab.Mvc</title>
-    <script type="importmap"></script>
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css"/>
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true"/>
-    <link rel="stylesheet" href="~/IdentityLab.Mvc.styles.css" asp-append-version="true"/>
-</head>
-<body>
-@{
+﻿@{
+    const string siteName = "IdentityLab";
+    const string defaultDescription = "IdentityLab is a hands-on lab for learning ASP.NET Core Identity: registration, email confirmation, password reset, Google sign-in and two-factor authentication.";
+
+    // Each view can customize these through ViewData.
+    var pageTitle = ViewData["Title"] as string;
+    var fullTitle = string.IsNullOrWhiteSpace(pageTitle) ? siteName : $"{pageTitle} · {siteName}";
+    var description = ViewData["Description"] as string ?? defaultDescription;
+    var robots = ViewData["Robots"] as string ?? "index, follow";
+    var mainClass = ViewData["MainClass"] as string ?? "site-main";
+
+    // Canonical URL without the query string (it may contain tokens).
+    var canonicalUrl = $"{Context.Request.Scheme}://{Context.Request.Host}{Context.Request.PathBase}{Context.Request.Path}";
+
     var currentController = ViewContext.RouteData.Values["controller"]?.ToString();
     var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
     var isHome = currentController == "Home" && currentAction == "Index";
     var isPrivacy = currentController == "Home" && currentAction == "Privacy";
     var isLogin = currentController == "Account" && currentAction == "Login";
+    var isManage = currentController == "Manage";
+
+    var isAuthenticated = User.Identity?.IsAuthenticated == true;
     var userName = User.Identity?.Name ?? string.Empty;
     var userInitial = userName.Length > 0 ? char.ToUpperInvariant(userName[0]).ToString() : "?";
 }
-<header>
-    <nav class="navbar navbar-expand-md navbar-dark bg-primary shadow-sm mb-4">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@fullTitle</title>
+    <meta name="description" content="@description" />
+    <meta name="robots" content="@robots" />
+    <meta name="application-name" content="@siteName" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="color-scheme" content="light" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="canonical" href="@canonicalUrl" />
+
+    @* Previews when the link is shared (Open Graph and Twitter/X cards) *@
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="@siteName" />
+    <meta property="og:title" content="@fullTitle" />
+    <meta property="og:description" content="@description" />
+    <meta property="og:url" content="@canonicalUrl" />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="@fullTitle" />
+    <meta name="twitter:description" content="@description" />
+
+    <link rel="icon" href="~/favicon.ico" sizes="any" />
+    <link rel="icon" href="~/favicon.svg" type="image/svg+xml" />
+
+    <script type="importmap"></script>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+<a class="skip-link visually-hidden-focusable" href="#main-content">Skip to main content</a>
+
+<header class="site-header">
+    <nav class="navbar navbar-expand-md" aria-label="Main navigation">
         <div class="container">
-            <a class="navbar-brand text-white fw-semibold d-flex align-items-center gap-2" asp-area="" asp-controller="Home" asp-action="Index">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/>
-                    <path d="m9 12 2 2 4-4"/>
-                </svg>
-                IdentityLab
+            <a class="brand me-md-4" asp-area="" asp-controller="Home" asp-action="Index">
+                <span class="brand-mark">@await Html.PartialAsync("_Icon", "shield")</span>
+                <span>@siteName</span>
             </a>
+
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar"
                     aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            <div class="collapse navbar-collapse" id="mainNavbar">
+
+            <div class="collapse navbar-collapse site-nav" id="mainNavbar">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link link-light @(isHome ? "active fw-semibold" : "link-opacity-75 link-opacity-100-hover")"
-                           aria-current="@(isHome ? "page" : null)"
+                        <a class="nav-link @(isHome ? "active" : null)" aria-current="@(isHome ? "page" : null)"
                            asp-area="" asp-controller="Home" asp-action="Index">Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link link-light @(isPrivacy ? "active fw-semibold" : "link-opacity-75 link-opacity-100-hover")"
-                           aria-current="@(isPrivacy ? "page" : null)"
+                        <a class="nav-link @(isPrivacy ? "active" : null)" aria-current="@(isPrivacy ? "page" : null)"
                            asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
                     </li>
                 </ul>
-                <ul class="navbar-nav align-items-md-center gap-2 pb-2 pb-md-0">
-                    @if (User.Identity?.IsAuthenticated == true)
+
+                <ul class="navbar-nav align-items-md-center gap-md-2">
+                    @if (isAuthenticated)
                     {
                         <li class="nav-item dropdown">
-                            <a class="nav-link link-light dropdown-toggle d-flex align-items-center gap-2" href="#"
+                            <a class="nav-link dropdown-toggle account-toggle @(isManage ? "active" : null)" href="#"
                                role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-white text-primary fw-bold"
-                                      style="width: 2rem; height: 2rem;" aria-hidden="true">@userInitial</span>
-                                <span>@userName</span>
+                                <span class="avatar" aria-hidden="true">@userInitial</span>
+                                <span class="account-name">@userName</span>
                             </a>
-                            <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-                                <li><h6 class="dropdown-header">Signed in as</h6></li>
-                                <li><span class="dropdown-item-text fw-semibold">@userName</span></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item text-body" asp-controller="Manage" asp-action="Index">My account</a></li>
-                                <li><hr class="dropdown-divider"></li>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><span class="dropdown-header">Signed in as <strong class="text-body">@userName</strong></span></li>
+                                <li><hr class="dropdown-divider" /></li>
                                 <li>
-                                    <form asp-controller="Account" asp-action="Logout" method="post">
-                                        <button type="submit" class="dropdown-item text-danger">Logout</button>
+                                    <a class="dropdown-item" asp-area="" asp-controller="Manage" asp-action="Index">
+                                        @await Html.PartialAsync("_Icon", "user")
+                                        My account
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider" /></li>
+                                <li>
+                                    <form asp-area="" asp-controller="Account" asp-action="Logout" method="post">
+                                        <button type="submit" class="dropdown-item dropdown-item--danger">
+                                            @await Html.PartialAsync("_Icon", "log-out")
+                                            Log out
+                                        </button>
                                     </form>
                                 </li>
                             </ul>
@@ -74,12 +117,11 @@
                     else
                     {
                         <li class="nav-item">
-                            <a class="nav-link link-light @(isLogin ? "active fw-semibold" : "link-opacity-75 link-opacity-100-hover")"
-                               aria-current="@(isLogin ? "page" : null)"
-                               asp-controller="Account" asp-action="Login">Login</a>
+                            <a class="nav-link @(isLogin ? "active" : null)" aria-current="@(isLogin ? "page" : null)"
+                               asp-area="" asp-controller="Account" asp-action="Login">Log in</a>
                         </li>
                         <li class="nav-item">
-                            <a class="btn btn-light btn-sm text-primary fw-semibold px-3" asp-controller="Account" asp-action="Register">Create account</a>
+                            <a class="btn btn-primary btn-sm px-3" asp-area="" asp-controller="Account" asp-action="Register">Create account</a>
                         </li>
                     }
                 </ul>
@@ -87,17 +129,38 @@
         </div>
     </nav>
 </header>
-<div class="container">
-    <main role="main" class="pb-3">
-        @RenderBody()
-    </main>
-</div>
 
-<footer class="border-top footer text-muted">
-    <div class="container">
-        &copy; 2026 - IdentityLab.Mvc - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+<main id="main-content" class="@mainClass" tabindex="-1">
+    @RenderBody()
+</main>
+
+<footer class="site-footer">
+    <div class="container site-footer__inner">
+        <p class="site-footer__brand">
+            <span class="brand-mark brand-mark--sm">@await Html.PartialAsync("_Icon", "shield")</span>
+            <span><strong>@siteName</strong> · A hands-on ASP.NET Core Identity lab</span>
+        </p>
+
+        <nav aria-label="Footer">
+            <ul class="footer-links">
+                <li><a asp-area="" asp-controller="Home" asp-action="Index">Home</a></li>
+                <li><a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a></li>
+                @if (isAuthenticated)
+                {
+                    <li><a asp-area="" asp-controller="Manage" asp-action="Index">My account</a></li>
+                }
+                else
+                {
+                    <li><a asp-area="" asp-controller="Account" asp-action="Login">Log in</a></li>
+                    <li><a asp-area="" asp-controller="Account" asp-action="Register">Create account</a></li>
+                }
+            </ul>
+        </nav>
+
+        <p><small>&copy; @DateTime.UtcNow.Year @siteName</small></p>
     </div>
 </footer>
+
 <script src="~/lib/jquery/dist/jquery.min.js"></script>
 <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 <script src="~/js/site.js" asp-append-version="true"></script>

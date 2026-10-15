@@ -1,8 +1,94 @@
 ﻿@{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "ASP.NET Core Identity, step by step";
+    ViewData["Description"] = "IdentityLab is a hands-on lab that implements ASP.NET Core Identity by hand: email confirmation, password reset, Google sign-in, two-factor authentication and recovery codes.";
+    ViewData["MainClass"] = "site-main site-main--decorated";
+    var isAuthenticated = User.Identity?.IsAuthenticated == true;
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
-</div>
+<section class="container hero" aria-labelledby="hero-title">
+    <p class="hero-badge">
+        @await Html.PartialAsync("_Icon", "shield")
+        ASP.NET Core Identity · .NET 10
+    </p>
+
+    <h1 id="hero-title" class="hero-title">
+        Authentication, <span class="text-gradient">built step by step</span>
+    </h1>
+
+    <p class="hero-lead">
+        IdentityLab adds ASP.NET Core Identity by hand, with no scaffolding and no default UI,
+        so every piece is written and understood.
+    </p>
+
+    <div class="hero-actions">
+        @if (isAuthenticated)
+        {
+            <a asp-controller="Manage" asp-action="Index" class="btn btn-primary btn-lg">
+                Go to my account @await Html.PartialAsync("_Icon", "arrow-right")
+            </a>
+        }
+        else
+        {
+            <a asp-controller="Account" asp-action="Register" class="btn btn-primary btn-lg">
+                Create account @await Html.PartialAsync("_Icon", "arrow-right")
+            </a>
+            <a asp-controller="Account" asp-action="Login" class="btn btn-outline-secondary btn-lg">Log in</a>
+        }
+    </div>
+
+    <ul class="tech-list" aria-label="Tech stack">
+        <li>.NET 10</li>
+        <li>ASP.NET Core MVC</li>
+        <li>ASP.NET Core Identity</li>
+        <li>Entity Framework Core</li>
+        <li>PostgreSQL</li>
+        <li>Bootstrap 5</li>
+    </ul>
+</section>
+
+<section class="container features" aria-labelledby="features-title">
+    <header class="section-header">
+        <h2 id="features-title" class="section-title">What's inside</h2>
+        <p class="section-lead">
+            Every feature is built on top of <code>UserManager</code> and <code>SignInManager</code>, one piece at a time.
+        </p>
+    </header>
+
+    <div class="feature-grid">
+        <article class="surface feature-card">
+            <span class="feature-icon">@await Html.PartialAsync("_Icon", "user")</span>
+            <h3 class="feature-title">Registration and login</h3>
+            <p class="feature-text">Sign up with a username, log in with your email or username, and get locked out after too many failed attempts.</p>
+        </article>
+
+        <article class="surface feature-card">
+            <span class="feature-icon">@await Html.PartialAsync("_Icon", "mail")</span>
+            <h3 class="feature-title">Email confirmation</h3>
+            <p class="feature-text">A signed, time-limited link is emailed before the first sign-in, sent with MailKit over SMTP.</p>
+        </article>
+
+        <article class="surface feature-card">
+            <span class="feature-icon">@await Html.PartialAsync("_Icon", "lock")</span>
+            <h3 class="feature-title">Password reset</h3>
+            <p class="feature-text">Single-use reset links that never reveal whether an account exists.</p>
+        </article>
+
+        <article class="surface feature-card">
+            <span class="feature-icon">@await Html.PartialAsync("_Icon", "google")</span>
+            <h3 class="feature-title">Sign in with Google</h3>
+            <p class="feature-text">OAuth 2.0 and OpenID Connect, with safe account creation and no automatic account linking.</p>
+        </article>
+
+        <article class="surface feature-card">
+            <span class="feature-icon">@await Html.PartialAsync("_Icon", "smartphone")</span>
+            <h3 class="feature-title">Two-factor authentication</h3>
+            <p class="feature-text">Time-based codes from an authenticator app, set up with a QR code generated on the server.</p>
+        </article>
+
+        <article class="surface feature-card">
+            <span class="feature-icon">@await Html.PartialAsync("_Icon", "key")</span>
+            <h3 class="feature-title">Recovery codes</h3>
+            <p class="feature-text">Ten one-time backup codes to get back in if you lose your phone.</p>
+        </article>
+    </div>
+</section>

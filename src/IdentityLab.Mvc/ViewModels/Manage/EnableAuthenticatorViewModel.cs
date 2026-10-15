@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace IdentityLab.Mvc.Models;
+namespace IdentityLab.Mvc.ViewModels.Manage;
 
 public class EnableAuthenticatorViewModel
 {

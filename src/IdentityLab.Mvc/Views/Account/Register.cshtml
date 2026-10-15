@@ -1,111 +1,78 @@
 @model RegisterViewModel
 
 @{
-    ViewData["Title"] = "Register";
+    Layout = "_AuthLayout";
+    ViewData["Title"] = "Create account";
+    ViewData["Description"] = "Create your IdentityLab account with an email and password, or continue with Google.";
+    ViewData["Robots"] = "index, follow";
+    ViewData["AuthCardClass"] = "auth-card--wide";
 }
 
-<div class="row justify-content-center py-md-3">
-    <div class="col-sm-11 col-md-9 col-lg-7 col-xl-6">
-        <div class="card border-0 shadow-sm">
-            <div class="card-body p-4 p-md-5">
-                <div class="text-center mb-4">
-                    <div
-                        class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary-subtle text-primary mb-3"
-                        style="width: 3.5rem; height: 3.5rem;">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                             stroke-width="2"
-                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <circle cx="9" cy="8" r="4"/>
-                            <path d="M2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1"/>
-                            <path d="M19 8v6M16 11h6"/>
-                        </svg>
-                    </div>
-                    <h1 class="h3 fw-semibold mb-1">Create your account</h1>
-                    <p class="text-body-secondary mb-0">It only takes a minute.</p>
-                </div>
+<header class="auth-header">
+    <span class="icon-badge">@await Html.PartialAsync("_Icon", "user-plus")</span>
+    <h1 id="page-title" class="auth-title">Create your account</h1>
+    <p class="auth-subtitle">It only takes a minute.</p>
+</header>
 
-                <form asp-action="Register" method="post">
-                    <div asp-validation-summary="ModelOnly" class="text-danger small mb-3" role="alert"></div>
+<partial name="_GoogleSignIn" />
 
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label asp-for="FullName" class="form-label fw-medium"></label>
-                            <input asp-for="FullName" class="form-control" autocomplete="name" placeholder="Jane Doe"/>
-                            <span asp-validation-for="FullName" class="text-danger small"></span>
-                        </div>
+<p class="auth-divider">or sign up with your email</p>
 
-                        <div class="col-md-6">
-                            <label asp-for="UserName" class="form-label fw-medium"></label>
-                            <input asp-for="UserName" class="form-control" autocomplete="username"
-                                   placeholder="janedoe"/>
-                            <span asp-validation-for="UserName" class="text-danger small"></span>
-                        </div>
+<form asp-action="Register" method="post">
+    <div asp-validation-summary="ModelOnly" role="alert"></div>
 
-                        <div class="col-12">
-                            <label asp-for="Email" class="form-label fw-medium"></label>
-                            <input asp-for="Email" class="form-control" autocomplete="email"
-                                   placeholder="jane@example.com"/>
-                            <span asp-validation-for="Email" class="text-danger small"></span>
-                        </div>
+    <fieldset class="form-section">
+        <legend class="form-section-title">Your details</legend>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label asp-for="FullName" class="form-label">Full name <span class="optional">(optional)</span></label>
+                <input asp-for="FullName" class="form-control" autocomplete="name" placeholder="Jane Doe" />
+                <span asp-validation-for="FullName"></span>
+            </div>
 
-                        <div class="col-md-6">
-                            <label asp-for="Password" class="form-label fw-medium"></label>
-                            <input asp-for="Password" class="form-control" autocomplete="new-password"
-                                   aria-describedby="passwordHelp"/>
-                            <span asp-validation-for="Password" class="text-danger small"></span>
-                        </div>
+            <div class="col-md-6">
+                <label asp-for="UserName" class="form-label"></label>
+                <input asp-for="UserName" class="form-control" autocomplete="username" placeholder="janedoe"
+                       aria-describedby="userNameHelp" />
+                <span asp-validation-for="UserName"></span>
+                <p id="userNameHelp" class="form-text mb-0">Letters, numbers, dots, underscores and hyphens.</p>
+            </div>
 
-                        <div class="col-md-6">
-                            <label asp-for="ConfirmPassword" class="form-label fw-medium"></label>
-                            <input asp-for="ConfirmPassword" class="form-control" autocomplete="new-password"/>
-                            <span asp-validation-for="ConfirmPassword" class="text-danger small"></span>
-                        </div>
-
-                        <div class="col-12">
-                            <div id="passwordHelp" class="form-text mt-0">
-                                At least 6 characters, including an uppercase letter, a lowercase letter, a number and a
-                                symbol.
-                            </div>
-                        </div>
-
-                        <div class="col-12 mt-4">
-                            <button type="submit" class="btn btn-primary btn-lg w-100">Create account</button>
-                        </div>
-                    </div>
-                </form>
-
-                <div class="d-flex align-items-center my-4">
-                    <hr class="flex-grow-1 my-0"/>
-                    <span class="px-3 text-body-secondary small">or</span>
-                    <hr class="flex-grow-1 my-0"/>
-                </div>
-
-                <form asp-action="ExternalLogin" asp-route-provider="Google" method="post">
-                    <button type="submit"
-                            class="btn btn-outline-secondary btn-lg w-100 d-flex align-items-center justify-content-center gap-2">
-                        <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
-                            <path fill="#EA4335"
-                                  d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                            <path fill="#4285F4"
-                                  d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                            <path fill="#FBBC05"
-                                  d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                            <path fill="#34A853"
-                                  d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                        </svg>
-                        <span>Continue with Google</span>
-                    </button>
-                </form>
-
-                <p class="text-center text-body-secondary mt-4 mb-0">
-                    Already have an account?
-                    <a asp-action="Login" class="fw-semibold text-decoration-none">Log in</a>
-                </p>
+            <div class="col-12">
+                <label asp-for="Email" class="form-label"></label>
+                <input asp-for="Email" class="form-control" autocomplete="email" placeholder="jane@example.com" />
+                <span asp-validation-for="Email"></span>
             </div>
         </div>
-    </div>
-</div>
+    </fieldset>
+
+    <fieldset class="form-section">
+        <legend class="form-section-title">Choose a password</legend>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label asp-for="Password" class="form-label"></label>
+                <input asp-for="Password" class="form-control" autocomplete="new-password" aria-describedby="passwordHelp" />
+                <span asp-validation-for="Password"></span>
+            </div>
+
+            <div class="col-md-6">
+                <label asp-for="ConfirmPassword" class="form-label"></label>
+                <input asp-for="ConfirmPassword" class="form-control" autocomplete="new-password" />
+                <span asp-validation-for="ConfirmPassword"></span>
+            </div>
+        </div>
+        <p id="passwordHelp" class="form-text mt-2 mb-0">
+            At least 6 characters, including an uppercase letter, a lowercase letter, a number and a symbol.
+        </p>
+    </fieldset>
+
+    <button type="submit" class="btn btn-primary btn-lg w-100 mt-4">Create account</button>
+</form>
+
+<p class="auth-footer">
+    Already have an account? <a asp-action="Login">Log in</a>
+</p>
 
 @section Scripts {
-    <partial name="_ValidationScriptsPartial"/>
+    <partial name="_ValidationScriptsPartial" />
 }

@@ -1,66 +1,51 @@
 @model DeleteAccountViewModel
 
 @{
+    Layout = "_ManageLayout";
     ViewData["Title"] = "Delete account";
 }
 
-<div class="row justify-content-center py-md-3">
-    <div class="col-sm-11 col-md-8 col-lg-6">
-
-        <a asp-action="Index" class="d-inline-flex align-items-center gap-1 text-decoration-none small mb-3">
-            <span aria-hidden="true">&larr;</span> Back to my account
-        </a>
-
-        <div class="card border border-danger-subtle shadow-sm">
-            <div class="card-body p-4 p-md-5">
-                <div class="d-flex align-items-center gap-3 mb-4">
-                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-danger-subtle text-danger flex-shrink-0"
-                         style="width: 3.5rem; height: 3.5rem;">
-                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M3 6h18"/>
-                            <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                            <path d="M10 11v6M14 11v6"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <h1 class="h4 fw-semibold text-danger mb-1">@ViewData["Title"]</h1>
-                        <p class="text-body-secondary mb-0">This action is permanent and can't be undone.</p>
-                    </div>
-                </div>
-
-                <div class="alert alert-danger small" role="alert">
-                    Your profile, linked logins (like Google), two-factor settings and recovery codes will be deleted.
-                </div>
-
-                <form asp-action="DeleteAccount" method="post">
-                    <div asp-validation-summary="ModelOnly" class="text-danger small mb-3" role="alert"></div>
-
-                    @if (Model.RequirePassword)
-                    {
-                        <div class="mb-4">
-                            <label asp-for="Password" class="form-label fw-medium">Enter your password to confirm</label>
-                            <input asp-for="Password" class="form-control" autocomplete="current-password" required />
-                            <span asp-validation-for="Password" class="text-danger small"></span>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="mb-4">
-                            <label asp-for="Confirmation" class="form-label fw-medium"></label>
-                            <input asp-for="Confirmation" class="form-control" autocomplete="off" required />
-                            <span asp-validation-for="Confirmation" class="text-danger small"></span>
-                        </div>
-                    }
-
-                    <div class="d-flex flex-wrap gap-2">
-                        <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
-                        <button type="submit" class="btn btn-danger ms-auto">Delete my account</button>
-                    </div>
-                </form>
-            </div>
+<section class="surface panel panel--danger" aria-labelledby="page-title">
+    <header class="panel-header">
+        <span class="icon-badge icon-badge--danger">@await Html.PartialAsync("_Icon", "trash")</span>
+        <div>
+            <h1 id="page-title" class="panel-title">Delete account</h1>
+            <p class="panel-subtitle">This action is permanent and can't be undone.</p>
         </div>
+    </header>
 
-    </div>
-</div>
+    <aside class="callout callout--danger" aria-labelledby="delete-warning-title">
+        @await Html.PartialAsync("_Icon", "alert")
+        <div>
+            <h2 id="delete-warning-title" class="callout-title">This will permanently delete:</h2>
+            <ul>
+                <li>Your profile and sign-in details.</li>
+                <li>Linked logins, like Google.</li>
+                <li>Your two-factor settings and recovery codes.</li>
+            </ul>
+        </div>
+    </aside>
+
+    <form asp-action="DeleteAccount" method="post" class="mt-4">
+        <div asp-validation-summary="ModelOnly" role="alert"></div>
+
+        @if (Model.RequirePassword)
+        {
+            <label asp-for="Password" class="form-label">Enter your password to confirm</label>
+            <input asp-for="Password" class="form-control" autocomplete="current-password" required />
+            <span asp-validation-for="Password"></span>
+        }
+        else
+        {
+            <label asp-for="Confirmation" class="form-label">Type <strong>@Model.UserName</strong> to confirm</label>
+            <input asp-for="Confirmation" class="form-control" autocomplete="off" autocapitalize="off"
+                   spellcheck="false" required />
+            <span asp-validation-for="Confirmation"></span>
+        }
+
+        <div class="panel-actions">
+            <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-danger ms-sm-auto">Delete my account</button>
+        </div>
+    </form>
+</section>

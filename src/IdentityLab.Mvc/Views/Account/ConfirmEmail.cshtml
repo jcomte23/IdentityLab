@@ -1,21 +1,30 @@
 @model bool
 
 @{
-    ViewData["Title"] = "Confirm email";
+    Layout = "_AuthLayout";
+    ViewData["Title"] = Model ? "Email confirmed" : "Email not confirmed";
 }
 
-<div class="row justify-content-center">
-    <div class="col-md-6 col-lg-5 text-center">
-        <h1 class="h3 mb-4">@ViewData["Title"]</h1>
+@if (Model)
+{
+    <header class="auth-header">
+        <span class="icon-badge icon-badge--success">@await Html.PartialAsync("_Icon", "check-circle")</span>
+        <h1 id="page-title" class="auth-title">Email confirmed</h1>
+        <p class="auth-subtitle">Thank you for confirming your email. You can now log in.</p>
+    </header>
 
-        @if (Model)
-        {
-            <p>Thank you for confirming your email. You can now log in.</p>
-            <a asp-action="Login" class="btn btn-primary">Login</a>
-        }
-        else
-        {
-            <p class="text-danger">We couldn't confirm your email. The link may be invalid or expired.</p>
-        }
+    <a asp-action="Login" class="btn btn-primary btn-lg w-100">Log in</a>
+}
+else
+{
+    <header class="auth-header">
+        <span class="icon-badge icon-badge--danger">@await Html.PartialAsync("_Icon", "x-circle")</span>
+        <h1 id="page-title" class="auth-title">We couldn't confirm your email</h1>
+        <p class="auth-subtitle">The link may be invalid or expired.</p>
+    </header>
+
+    <div class="auth-actions">
+        <a asp-action="Login" class="btn btn-primary">Go to login</a>
+        <a asp-controller="Home" asp-action="Index" class="btn btn-outline-secondary">Back to home</a>
     </div>
-</div>
+}

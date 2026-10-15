@@ -1,175 +1,170 @@
 @model ManageIndexViewModel
 
 @{
+    Layout = "_ManageLayout";
     ViewData["Title"] = "My account";
     var displayName = string.IsNullOrWhiteSpace(Model.FullName) ? Model.UserName : Model.FullName;
     var initial = displayName.Length > 0 ? char.ToUpperInvariant(displayName[0]).ToString() : "?";
 }
 
-<div class="row justify-content-center py-md-3">
-    <div class="col-lg-9 col-xl-8">
+<header class="profile-header">
+    <span class="avatar avatar--xl" aria-hidden="true">@initial</span>
+    <div class="min-w-0">
+        <h1 class="profile-name text-truncate">@displayName</h1>
+        <p class="profile-handle text-truncate">@@@Model.UserName</p>
+    </div>
+</header>
 
-        @if (TempData["StatusMessage"] is string statusMessage)
-        {
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                @statusMessage
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        }
+<section class="surface settings-card" aria-labelledby="profile-title">
+    <header class="settings-card__header">
+        <h2 id="profile-title" class="settings-card__title">Profile</h2>
+        <p class="settings-card__subtitle">Your personal information.</p>
+    </header>
 
-        <div class="d-flex align-items-center gap-3 mb-4">
-            <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary text-white fs-3 fw-bold flex-shrink-0"
-                  style="width: 4rem; height: 4rem;" aria-hidden="true">@initial</span>
-            <div class="min-w-0">
-                <h1 class="h3 fw-semibold mb-0 text-truncate">@displayName</h1>
-                <p class="text-body-secondary mb-0 text-truncate">@@@Model.UserName</p>
-            </div>
+    <dl class="detail-list">
+        <div>
+            <dt>Full name</dt>
+            <dd>
+                @if (string.IsNullOrWhiteSpace(Model.FullName))
+                {
+                    <span class="text-body-secondary fst-italic">Not set</span>
+                }
+                else
+                {
+                    @Model.FullName
+                }
+            </dd>
         </div>
-
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-body border-0 pt-4 px-4">
-                <h2 class="h5 fw-semibold mb-0">Profile</h2>
-            </div>
-            <div class="card-body px-4 pb-4">
-                <dl class="row mb-0">
-                    <dt class="col-sm-4 text-body-secondary fw-normal">Full name</dt>
-                    <dd class="col-sm-8">
-                        @if (string.IsNullOrWhiteSpace(Model.FullName))
-                        {
-                            <span class="text-body-secondary fst-italic">Not set</span>
-                        }
-                        else
-                        {
-                            @Model.FullName
-                        }
-                    </dd>
-
-                    <dt class="col-sm-4 text-body-secondary fw-normal">Username</dt>
-                    <dd class="col-sm-8">@Model.UserName</dd>
-
-                    <dt class="col-sm-4 text-body-secondary fw-normal">Email</dt>
-                    <dd class="col-sm-8 mb-0">
-                        <span class="text-break">@Model.Email</span>
-                        @if (Model.EmailConfirmed)
-                        {
-                            <span class="badge rounded-pill bg-success-subtle text-success-emphasis ms-1">Verified</span>
-                        }
-                        else
-                        {
-                            <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis ms-1">Not verified</span>
-                        }
-                    </dd>
-                </dl>
-            </div>
+        <div>
+            <dt>Username</dt>
+            <dd>@Model.UserName</dd>
         </div>
+        <div>
+            <dt>Email</dt>
+            <dd>
+                <span>@Model.Email</span>
+                @if (Model.EmailConfirmed)
+                {
+                    <span class="status status--success">Verified</span>
+                }
+                else
+                {
+                    <span class="status status--warning">Not verified</span>
+                }
+            </dd>
+        </div>
+    </dl>
+</section>
 
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-body border-0 pt-4 px-4">
-                <h2 class="h5 fw-semibold mb-0">Security</h2>
+<section class="surface settings-card" aria-labelledby="security-title">
+    <header class="settings-card__header">
+        <h2 id="security-title" class="settings-card__title">Security</h2>
+        <p class="settings-card__subtitle">Control how you sign in to IdentityLab.</p>
+    </header>
+
+    <ul class="settings-list">
+        <li class="settings-item">
+            <span class="settings-item__icon">@await Html.PartialAsync("_Icon", "lock")</span>
+            <div>
+                <h3 class="settings-item__title">Password</h3>
+                <p class="settings-item__text">
+                    @(Model.HasPassword
+                        ? "You can log in with your email or username and password."
+                        : "Your account doesn't have a password. You log in with an external provider.")
+                </p>
             </div>
-            <div class="list-group list-group-flush px-2 pb-2">
+            <div class="settings-item__actions">
+                @if (Model.HasPassword)
+                {
+                    <span class="status status--success">Set</span>
+                }
+                else
+                {
+                    <span class="status">Not set</span>
+                }
+            </div>
+        </li>
 
-                <div class="list-group-item d-flex justify-content-between align-items-center gap-3 py-3">
-                    <div>
-                        <div class="fw-medium">Password</div>
-                        <div class="small text-body-secondary">
-                            @(Model.HasPassword
-                                ? "You can log in with your email or username and password."
-                                : "Your account doesn't have a password. You log in with an external provider.")
-                        </div>
-                    </div>
-                    @if (Model.HasPassword)
-                    {
-                        <span class="badge rounded-pill bg-success-subtle text-success-emphasis">Set</span>
-                    }
-                    else
-                    {
-                        <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">Not set</span>
-                    }
-                </div>
-
-                <div class="list-group-item d-flex justify-content-between align-items-center gap-3 py-3">
-                    <div>
-                        <div class="fw-medium">Two-factor authentication</div>
-                        <div class="small text-body-secondary">Add an extra layer of security with an authenticator app.</div>
-                    </div>
-                    @if (Model.TwoFactorEnabled)
-                    {
-                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                            <span class="badge rounded-pill bg-success-subtle text-success-emphasis">Enabled</span>
-                            <form asp-action="Disable2fa" method="post"
-                                  onsubmit="return confirm('Disable two-factor authentication? You will need to scan a new QR code to enable it again.');">
-                                <button type="submit" class="btn btn-outline-danger btn-sm">Disable</button>
-                            </form>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                            <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">Not enabled</span>
-                            <a asp-action="EnableAuthenticator" class="btn btn-primary btn-sm">Set up</a>
-                        </div>
-                    }
-                </div>
-
+        <li class="settings-item">
+            <span class="settings-item__icon">@await Html.PartialAsync("_Icon", "smartphone")</span>
+            <div>
+                <h3 class="settings-item__title">Two-factor authentication</h3>
+                <p class="settings-item__text">Add an extra layer of security with an authenticator app.</p>
+            </div>
+            <div class="settings-item__actions">
                 @if (Model.TwoFactorEnabled)
                 {
-                    <div class="list-group-item d-flex justify-content-between align-items-center gap-3 py-3">
-                        <div>
-                            <div class="fw-medium">Recovery codes</div>
-                            <div class="small text-body-secondary">
-                                One-time codes to log in if you lose access to your authenticator app.
-                            </div>
-                            @if (Model.RecoveryCodesLeft <= 3)
-                            {
-                                <div class="small text-warning-emphasis mt-1">
-                                    @(Model.RecoveryCodesLeft == 0
-                                        ? "You have no recovery codes left. Generate new ones."
-                                        : "You're running low on recovery codes. Consider generating new ones.")
-                                </div>
-                            }
-                        </div>
-                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                            <span class="badge rounded-pill @(Model.RecoveryCodesLeft <= 3 ? "bg-warning-subtle text-warning-emphasis" : "bg-success-subtle text-success-emphasis")">
-                                @Model.RecoveryCodesLeft left
-                            </span>
-                            <form asp-action="GenerateRecoveryCodes" method="post"
-                                  onsubmit="return confirm('Generating new codes will invalidate your current recovery codes. Continue?');">
-                                <button type="submit" class="btn btn-outline-secondary btn-sm">Generate new</button>
-                            </form>
-                        </div>
-                    </div>
+                    <span class="status status--success">Enabled</span>
+                    <form asp-action="Disable2fa" method="post"
+                          data-confirm="Disable two-factor authentication? You will need to scan a new QR code to enable it again.">
+                        <button type="submit" class="btn btn-outline-danger btn-sm">Disable</button>
+                    </form>
                 }
-
-                <div class="list-group-item d-flex justify-content-between align-items-center gap-3 py-3">
-                    <div>
-                        <div class="fw-medium">Linked logins</div>
-                        <div class="small text-body-secondary">External accounts you can use to log in.</div>
-                    </div>
-                    <div class="d-flex flex-wrap justify-content-end gap-1">
-                        @if (Model.ExternalLogins.Count == 0)
-                        {
-                            <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">None</span>
-                        }
-                        @foreach (var provider in Model.ExternalLogins)
-                        {
-                            <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis">@provider</span>
-                        }
-                    </div>
-                </div>
-
+                else
+                {
+                    <span class="status">Not enabled</span>
+                    <a asp-action="EnableAuthenticator" class="btn btn-primary btn-sm">Set up</a>
+                }
             </div>
-        </div>
+        </li>
 
-        <div class="card border border-danger-subtle shadow-sm mt-4">
-            <div class="card-body p-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+        @if (Model.TwoFactorEnabled)
+        {
+            var isRunningLow = Model.RecoveryCodesLeft <= 3;
+
+            <li class="settings-item">
+                <span class="settings-item__icon">@await Html.PartialAsync("_Icon", "key")</span>
                 <div>
-                    <h2 class="h5 fw-semibold text-danger mb-1">Delete account</h2>
-                    <div class="small text-body-secondary">Permanently delete your account and all its data. This can't be undone.</div>
+                    <h3 class="settings-item__title">Recovery codes</h3>
+                    <p class="settings-item__text">One-time codes to log in if you lose access to your authenticator app.</p>
+                    @if (isRunningLow)
+                    {
+                        <p class="settings-item__note">
+                            @(Model.RecoveryCodesLeft == 0
+                                ? "You have no recovery codes left. Generate new ones."
+                                : "You're running low on recovery codes. Consider generating new ones.")
+                        </p>
+                    }
                 </div>
-                <a asp-action="DeleteAccount" class="btn btn-outline-danger">Delete account</a>
-            </div>
-        </div>
+                <div class="settings-item__actions">
+                    <span class="status @(isRunningLow ? "status--warning" : "status--success")">@Model.RecoveryCodesLeft left</span>
+                    <form asp-action="GenerateRecoveryCodes" method="post"
+                          data-confirm="Generating new codes will invalidate your current recovery codes. Continue?">
+                        <button type="submit" class="btn btn-outline-secondary btn-sm">Generate new</button>
+                    </form>
+                </div>
+            </li>
+        }
 
+        <li class="settings-item">
+            <span class="settings-item__icon">@await Html.PartialAsync("_Icon", "link")</span>
+            <div>
+                <h3 class="settings-item__title">Linked logins</h3>
+                <p class="settings-item__text">External accounts you can use to log in.</p>
+            </div>
+            <div class="settings-item__actions">
+                @if (Model.ExternalLogins.Count == 0)
+                {
+                    <span class="status">None</span>
+                }
+                @foreach (var provider in Model.ExternalLogins)
+                {
+                    <span class="status status--brand">@provider</span>
+                }
+            </div>
+        </li>
+    </ul>
+</section>
+
+<section class="surface settings-card settings-card--danger" aria-labelledby="danger-title">
+    <div class="settings-item">
+        <span class="settings-item__icon settings-item__icon--danger">@await Html.PartialAsync("_Icon", "trash")</span>
+        <div>
+            <h2 id="danger-title" class="settings-item__title">Delete account</h2>
+            <p class="settings-item__text">Permanently delete your account and all its data. This can't be undone.</p>
+        </div>
+        <div class="settings-item__actions">
+            <a asp-action="DeleteAccount" class="btn btn-outline-danger btn-sm">Delete account</a>
+        </div>
     </div>
-</div>
+</section>
