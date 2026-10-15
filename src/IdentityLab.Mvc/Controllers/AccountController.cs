@@ -79,9 +79,9 @@ public class AccountController : Controller
         return View();
     }
     
-    /*---------------------------------*/
-    /*Login de un usuario en el sistema*/
-    /*---------------------------------*/
+    /*-----------------------------------------*/
+    /*Login externo de un usuario en el sistema*/
+    /*-----------------------------------------*/
     [HttpPost]
     [ValidateAntiForgeryToken]
     public IActionResult ExternalLogin(string provider, string? returnUrl = null)

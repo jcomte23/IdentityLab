@@ -1,0 +1,89 @@
+@model EnableAuthenticatorViewModel
+
+@{
+    ViewData["Title"] = "Set up authenticator app";
+}
+
+<div class="row justify-content-center py-md-3">
+    <div class="col-lg-8 col-xl-7">
+
+        <a asp-action="Index" class="d-inline-flex align-items-center gap-1 text-decoration-none small mb-3">
+            <span aria-hidden="true">&larr;</span> Back to my account
+        </a>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4 p-md-5">
+                <div class="d-flex align-items-center gap-3 mb-4">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary-subtle text-primary flex-shrink-0"
+                         style="width: 3.5rem; height: 3.5rem;">
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="6" y="2" width="12" height="20" rx="2"/>
+                            <path d="M11 18h2"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="h4 fw-semibold mb-1">@ViewData["Title"]</h1>
+                        <p class="text-body-secondary mb-0">Use an authenticator app to generate one-time login codes.</p>
+                    </div>
+                </div>
+
+                <ol class="list-unstyled mb-0">
+                    <li class="d-flex gap-3 mb-4">
+                        <span class="badge rounded-pill bg-primary flex-shrink-0 align-self-start mt-1">1</span>
+                        <div>
+                            <div class="fw-medium">Install an authenticator app</div>
+                            <div class="small text-body-secondary">
+                                For example Google Authenticator or Microsoft Authenticator, on your phone.
+                            </div>
+                        </div>
+                    </li>
+
+                    <li class="d-flex gap-3 mb-4">
+                        <span class="badge rounded-pill bg-primary flex-shrink-0 align-self-start mt-1">2</span>
+                        <div class="flex-grow-1 min-w-0">
+                            <div class="fw-medium">Add this key to the app</div>
+                            <div class="small text-body-secondary mb-2">
+                                Choose <em>"Enter a setup key"</em>, type the key below and select <em>"Time based"</em>.
+                                Spaces and letter case don't matter.
+                            </div>
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                <code id="sharedKey" class="fs-5 bg-body-tertiary rounded-3 px-3 py-2 text-body user-select-all text-break">@Model.SharedKey</code>
+                                <button type="button" id="copyKey" class="btn btn-outline-secondary btn-sm">Copy</button>
+                            </div>
+                            <div class="small text-body-secondary mt-2">A QR code to scan will be added in the next step.</div>
+                        </div>
+                    </li>
+
+                    <li class="d-flex gap-3">
+                        <span class="badge rounded-pill bg-secondary flex-shrink-0 align-self-start mt-1">3</span>
+                        <div>
+                            <div class="fw-medium text-body-secondary">Enter the 6-digit code from the app</div>
+                            <div class="small text-body-secondary">Coming soon: this will verify the code and turn on two-factor authentication.</div>
+                        </div>
+                    </li>
+                </ol>
+
+                <div class="alert alert-warning small mt-4 mb-0" role="alert">
+                    Keep this key private. Anyone who has it can generate your login codes.
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.getElementById('copyKey').addEventListener('click', async function () {
+            const key = document.getElementById('sharedKey').textContent.trim();
+            try {
+                await navigator.clipboard.writeText(key);
+                this.textContent = 'Copied!';
+            } catch {
+                this.textContent = 'Select and copy manually';
+            }
+            setTimeout(() => this.textContent = 'Copy', 2000);
+        });
+    </script>
+}

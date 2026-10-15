@@ -1,0 +1,122 @@
+@model ManageIndexViewModel
+
+@{
+    ViewData["Title"] = "My account";
+    var displayName = string.IsNullOrWhiteSpace(Model.FullName) ? Model.UserName : Model.FullName;
+    var initial = displayName.Length > 0 ? char.ToUpperInvariant(displayName[0]).ToString() : "?";
+}
+
+<div class="row justify-content-center py-md-3">
+    <div class="col-lg-9 col-xl-8">
+
+        <div class="d-flex align-items-center gap-3 mb-4">
+            <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary text-white fs-3 fw-bold flex-shrink-0"
+                  style="width: 4rem; height: 4rem;" aria-hidden="true">@initial</span>
+            <div class="min-w-0">
+                <h1 class="h3 fw-semibold mb-0 text-truncate">@displayName</h1>
+                <p class="text-body-secondary mb-0 text-truncate">@@@Model.UserName</p>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-body border-0 pt-4 px-4">
+                <h2 class="h5 fw-semibold mb-0">Profile</h2>
+            </div>
+            <div class="card-body px-4 pb-4">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4 text-body-secondary fw-normal">Full name</dt>
+                    <dd class="col-sm-8">
+                        @if (string.IsNullOrWhiteSpace(Model.FullName))
+                        {
+                            <span class="text-body-secondary fst-italic">Not set</span>
+                        }
+                        else
+                        {
+                            @Model.FullName
+                        }
+                    </dd>
+
+                    <dt class="col-sm-4 text-body-secondary fw-normal">Username</dt>
+                    <dd class="col-sm-8">@Model.UserName</dd>
+
+                    <dt class="col-sm-4 text-body-secondary fw-normal">Email</dt>
+                    <dd class="col-sm-8 mb-0">
+                        <span class="text-break">@Model.Email</span>
+                        @if (Model.EmailConfirmed)
+                        {
+                            <span class="badge rounded-pill bg-success-subtle text-success-emphasis ms-1">Verified</span>
+                        }
+                        else
+                        {
+                            <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis ms-1">Not verified</span>
+                        }
+                    </dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-body border-0 pt-4 px-4">
+                <h2 class="h5 fw-semibold mb-0">Security</h2>
+            </div>
+            <div class="list-group list-group-flush px-2 pb-2">
+
+                <div class="list-group-item d-flex justify-content-between align-items-center gap-3 py-3">
+                    <div>
+                        <div class="fw-medium">Password</div>
+                        <div class="small text-body-secondary">
+                            @(Model.HasPassword
+                                ? "You can log in with your email or username and password."
+                                : "Your account doesn't have a password. You log in with an external provider.")
+                        </div>
+                    </div>
+                    @if (Model.HasPassword)
+                    {
+                        <span class="badge rounded-pill bg-success-subtle text-success-emphasis">Set</span>
+                    }
+                    else
+                    {
+                        <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">Not set</span>
+                    }
+                </div>
+
+                <div class="list-group-item d-flex justify-content-between align-items-center gap-3 py-3">
+                    <div>
+                        <div class="fw-medium">Two-factor authentication</div>
+                        <div class="small text-body-secondary">Add an extra layer of security with an authenticator app.</div>
+                    </div>
+                    @if (Model.TwoFactorEnabled)
+                    {
+                        <span class="badge rounded-pill bg-success-subtle text-success-emphasis">Enabled</span>
+                    }
+                    else
+                    {
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">Not enabled</span>
+                            <a asp-action="EnableAuthenticator" class="btn btn-primary btn-sm">Set up</a>
+                        </div>
+                    }
+                </div>
+
+                <div class="list-group-item d-flex justify-content-between align-items-center gap-3 py-3">
+                    <div>
+                        <div class="fw-medium">Linked logins</div>
+                        <div class="small text-body-secondary">External accounts you can use to log in.</div>
+                    </div>
+                    <div class="d-flex flex-wrap justify-content-end gap-1">
+                        @if (Model.ExternalLogins.Count == 0)
+                        {
+                            <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">None</span>
+                        }
+                        @foreach (var provider in Model.ExternalLogins)
+                        {
+                            <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis">@provider</span>
+                        }
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
