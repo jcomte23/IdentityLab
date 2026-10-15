@@ -2,6 +2,7 @@ using IdentityLab.Mvc.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using QRCoder;
 
 namespace IdentityLab.Mvc.Controllers;
 
@@ -60,7 +61,9 @@ public class ManageController : Controller
             return RedirectToAction("Login", "Account");
         }
 
-        return View(new EnableAuthenticatorViewModel { SharedKey = await GetOrCreateSharedKeyAsync(user) });
+        var model = new EnableAuthenticatorViewModel();
+        await LoadAuthenticatorSetupAsync(model, user);
+        return View(model);
     }
 
     [HttpPost]
@@ -75,7 +78,7 @@ public class ManageController : Controller
 
         if (!ModelState.IsValid)
         {
-            model.SharedKey = await GetOrCreateSharedKeyAsync(user);
+            await LoadAuthenticatorSetupAsync(model, user);
             return View(model);
         }
 
@@ -86,7 +89,7 @@ public class ManageController : Controller
         if (!isValid)
         {
             ModelState.AddModelError(nameof(model.Code), "The verification code is invalid. Check that the time on your phone is correct and try again.");
-            model.SharedKey = await GetOrCreateSharedKeyAsync(user);
+            await LoadAuthenticatorSetupAsync(model, user);
             return View(model);
         }
 
@@ -141,7 +144,7 @@ public class ManageController : Controller
         return View(recoveryCodes);
     }
 
-    private async Task<string> GetOrCreateSharedKeyAsync(ApplicationUser user)
+    private async Task LoadAuthenticatorSetupAsync(EnableAuthenticatorViewModel model, ApplicationUser user)
     {
         var key = await _userManager.GetAuthenticatorKeyAsync(user);
         if (string.IsNullOrEmpty(key))
@@ -150,7 +153,27 @@ public class ManageController : Controller
             key = await _userManager.GetAuthenticatorKeyAsync(user);
         }
 
-        return FormatKey(key!);
+        var email = await _userManager.GetEmailAsync(user) ?? user.UserName ?? string.Empty;
+
+        model.SharedKey = FormatKey(key!);
+        model.QrCodeImage = GenerateQrCodeImage(BuildAuthenticatorUri(email, key!));
+    }
+
+    // Standard format understood by authenticator apps (Google Authenticator, Microsoft Authenticator...).
+    private static string BuildAuthenticatorUri(string email, string key)
+    {
+        const string issuer = "IdentityLab";
+        return $"otpauth://totp/{Uri.EscapeDataString(issuer)}:{Uri.EscapeDataString(email)}" +
+               $"?secret={key}&issuer={Uri.EscapeDataString(issuer)}&digits=6";
+    }
+
+    // Generated on the server so the secret key is never sent to a third-party service.
+    private static string GenerateQrCodeImage(string text)
+    {
+        using var generator = new QRCodeGenerator();
+        using var data = generator.CreateQrCode(text, QRCodeGenerator.ECCLevel.Q);
+        var png = new PngByteQRCode(data).GetGraphic(6);
+        return $"data:image/png;base64,{Convert.ToBase64String(png)}";
     }
 
     private static string FormatKey(string key)

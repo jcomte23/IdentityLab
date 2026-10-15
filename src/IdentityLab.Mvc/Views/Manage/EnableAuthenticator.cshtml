@@ -42,16 +42,27 @@
                     <li class="d-flex gap-3 mb-4">
                         <span class="badge rounded-pill bg-primary flex-shrink-0 align-self-start mt-1">2</span>
                         <div class="flex-grow-1 min-w-0">
-                            <div class="fw-medium">Add this key to the app</div>
-                            <div class="small text-body-secondary mb-2">
-                                Choose <em>"Enter a setup key"</em>, type the key below and select <em>"Time based"</em>.
-                                Spaces and letter case don't matter.
+                            <div class="fw-medium">Scan this QR code with the app</div>
+                            <div class="small text-body-secondary mb-3">
+                                In the app, tap <em>"+"</em> and choose <em>"Scan a QR code"</em>.
                             </div>
-                            <div class="d-flex flex-wrap align-items-center gap-2">
-                                <code id="sharedKey" class="fs-5 bg-body-tertiary rounded-3 px-3 py-2 text-body user-select-all text-break">@Model.SharedKey</code>
-                                <button type="button" id="copyKey" class="btn btn-outline-secondary btn-sm">Copy</button>
+
+                            <div class="d-inline-block bg-white border rounded-3 p-2 mb-3">
+                                <img src="@Model.QrCodeImage" alt="QR code to set up your authenticator app"
+                                     width="200" height="200" class="d-block" />
                             </div>
-                            <div class="small text-body-secondary mt-2">A QR code to scan will be added in the next step.</div>
+
+                            <details>
+                                <summary class="small text-body-secondary">Can't scan it? Enter the key manually</summary>
+                                <div class="small text-body-secondary mt-2 mb-2">
+                                    Choose <em>"Enter a setup key"</em>, type the key below and select <em>"Time based"</em>.
+                                    Spaces and letter case don't matter.
+                                </div>
+                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                    <code id="sharedKey" class="fs-5 bg-body-tertiary rounded-3 px-3 py-2 text-body user-select-all text-break">@Model.SharedKey</code>
+                                    <button type="button" id="copyKey" class="btn btn-outline-secondary btn-sm">Copy</button>
+                                </div>
+                            </details>
                         </div>
                     </li>
 
