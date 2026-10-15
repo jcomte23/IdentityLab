@@ -95,7 +95,13 @@
                     </div>
                     @if (Model.TwoFactorEnabled)
                     {
-                        <span class="badge rounded-pill bg-success-subtle text-success-emphasis">Enabled</span>
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            <span class="badge rounded-pill bg-success-subtle text-success-emphasis">Enabled</span>
+                            <form asp-action="Disable2fa" method="post"
+                                  onsubmit="return confirm('Disable two-factor authentication? You will need to scan a new QR code to enable it again.');">
+                                <button type="submit" class="btn btn-outline-danger btn-sm">Disable</button>
+                            </form>
+                        </div>
                     }
                     else
                     {
@@ -152,6 +158,16 @@
                     </div>
                 </div>
 
+            </div>
+        </div>
+
+        <div class="card border border-danger-subtle shadow-sm mt-4">
+            <div class="card-body p-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div>
+                    <h2 class="h5 fw-semibold text-danger mb-1">Delete account</h2>
+                    <div class="small text-body-secondary">Permanently delete your account and all its data. This can't be undone.</div>
+                </div>
+                <a asp-action="DeleteAccount" class="btn btn-outline-danger">Delete account</a>
             </div>
         </div>
 

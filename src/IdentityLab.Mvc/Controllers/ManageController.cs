@@ -98,13 +98,30 @@ public class ManageController : Controller
 
         TempData["StatusMessage"] = "Two-factor authentication is now enabled.";
 
-        if (await _userManager.CountRecoveryCodesAsync(user) == 0)
+        // Fresh codes every time 2FA is enabled, so codes from a previous setup stop working.
+        var recoveryCodes = await _userManager.GenerateNewTwoFactorRecoveryCodesAsync(user, 10);
+        TempData["RecoveryCodes"] = recoveryCodes?.ToArray();
+        return RedirectToAction("ShowRecoveryCodes");
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Disable2fa()
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
         {
-            var recoveryCodes = await _userManager.GenerateNewTwoFactorRecoveryCodesAsync(user, 10);
-            TempData["RecoveryCodes"] = recoveryCodes?.ToArray();
-            return RedirectToAction("ShowRecoveryCodes");
+            return RedirectToAction("Login", "Account");
         }
 
+        await _userManager.SetTwoFactorEnabledAsync(user, false);
+        // New key: the entry in the authenticator app stops working and enabling again needs a new QR code.
+        await _userManager.ResetAuthenticatorKeyAsync(user);
+        // Forget "Remember this device" on this browser.
+        await _signInManager.ForgetTwoFactorClientAsync();
+        await _signInManager.RefreshSignInAsync(user);
+
+        TempData["StatusMessage"] = "Two-factor authentication has been disabled. You can remove IdentityLab from your authenticator app.";
         return RedirectToAction("Index");
     }
 
@@ -142,6 +159,62 @@ public class ManageController : Controller
         }
 
         return View(recoveryCodes);
+    }
+
+    /*------------------*/
+    /*Eliminar la cuenta*/
+    /*------------------*/
+    [HttpGet]
+    public async Task<IActionResult> DeleteAccount()
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+        {
+            return RedirectToAction("Login", "Account");
+        }
+
+        return View(new DeleteAccountViewModel { RequirePassword = await _userManager.HasPasswordAsync(user) });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteAccount(DeleteAccountViewModel model)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+        {
+            return RedirectToAction("Login", "Account");
+        }
+
+        // Never trust the form for this: check it again on the server.
+        model.RequirePassword = await _userManager.HasPasswordAsync(user);
+
+        if (model.RequirePassword &&
+            (string.IsNullOrEmpty(model.Password) || !await _userManager.CheckPasswordAsync(user, model.Password)))
+        {
+            ModelState.AddModelError(nameof(model.Password), "Incorrect password.");
+            return View(model);
+        }
+
+        if (!model.RequirePassword && model.Confirmation != user.UserName)
+        {
+            ModelState.AddModelError(nameof(model.Confirmation), "Type your username exactly to confirm.");
+            return View(model);
+        }
+
+        var result = await _userManager.DeleteAsync(user);
+        if (!result.Succeeded)
+        {
+            foreach (var error in result.Errors)
+            {
+                ModelState.AddModelError(string.Empty, error.Description);
+            }
+
+            return View(model);
+        }
+
+        await _signInManager.SignOutAsync();
+        return RedirectToAction("Index", "Home");
     }
 
     private async Task LoadAuthenticatorSetupAsync(EnableAuthenticatorViewModel model, ApplicationUser user)
