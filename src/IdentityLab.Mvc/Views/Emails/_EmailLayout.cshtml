@@ -1,0 +1,77 @@
+@*
+    Layout for every email. Email clients (Gmail, Outlook...) support very little CSS, so this uses
+    tables and inline styles on purpose. Views set:
+      ViewData["Title"]      the email subject (shown in the <title>)
+      ViewData["Preheader"]  the preview text shown next to the subject in the inbox
+*@
+@{
+    const string fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+}
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+    <meta name="color-scheme" content="light" />
+    <meta name="supported-color-schemes" content="light" />
+    <title>@ViewData["Title"]</title>
+    <style>
+        @@media (max-width: 620px) {
+            .email-container { width: 100% !important; }
+            .email-card { padding: 32px 24px !important; }
+        }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f6f7fb; -webkit-text-size-adjust: 100%;">
+    @* Preview text: visible in the inbox list, hidden in the email itself *@
+    <div style="display: none; max-height: 0; overflow: hidden; opacity: 0; mso-hide: all;">
+        @ViewData["Preheader"]&#8203;&#847;&#8203;&#847;&#8203;&#847;&#8203;&#847;&#8203;&#847;&#8203;&#847;&#8203;&#847;&#8203;&#847;
+    </div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f6f7fb;">
+        <tr>
+            <td align="center" style="padding: 40px 16px;">
+                <table role="presentation" class="email-container" width="560" cellpadding="0" cellspacing="0" border="0"
+                       style="width: 560px; max-width: 560px;">
+
+                    @* Brand *@
+                    <tr>
+                        <td style="padding: 0 4px 24px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td width="36" height="36" align="center" valign="middle" bgcolor="#4f46e5"
+                                        style="width: 36px; height: 36px; border-radius: 10px; background-color: #4f46e5; background-image: linear-gradient(135deg, #4f46e5, #06b6d4); color: #ffffff; font-family: @fontFamily; font-size: 18px; font-weight: 700; line-height: 36px;">
+                                        &#10003;
+                                    </td>
+                                    <td style="padding-left: 10px; font-family: @fontFamily; font-size: 18px; font-weight: 700; color: #101828; letter-spacing: -0.2px;">
+                                        IdentityLab
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    @* Card *@
+                    <tr>
+                        <td class="email-card" bgcolor="#ffffff"
+                            style="padding: 40px; background-color: #ffffff; border: 1px solid #e4e7ec; border-radius: 16px; font-family: @fontFamily; font-size: 16px; line-height: 26px; color: #344054;">
+                            @RenderBody()
+                        </td>
+                    </tr>
+
+                    @* Footer *@
+                    <tr>
+                        <td align="center" style="padding: 24px 16px 0; font-family: @fontFamily; font-size: 12px; line-height: 20px; color: #667085;">
+                            You're receiving this email because of an action on your IdentityLab account.<br />
+                            IdentityLab is a learning project about ASP.NET Core Identity.<br />
+                            &copy; @DateTime.UtcNow.Year IdentityLab
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

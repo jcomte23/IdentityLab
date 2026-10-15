@@ -35,6 +35,8 @@ builder.Services.AddAuthentication()
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("Smtp"));
 
 builder.Services.AddTransient<IEmailSender, SmtpEmailSender>();
+builder.Services.AddTransient<IRazorViewRenderer, RazorViewRenderer>();
+builder.Services.AddTransient<IAccountEmailService, AccountEmailService>();
 
 var app = builder.Build();
 
