@@ -21,9 +21,11 @@ Notas del laboratorio **IdentityLab**: Identity agregado a mano en una app MVC c
 13. [Confirmación de correo](#13-confirmación-de-correo)
 14. [Recuperación de contraseña](#14-recuperación-de-contraseña)
 15. [Login con terceros (Google)](#15-login-con-terceros-google)
-16. [Git y commits](#16-git-y-commits)
-17. [Comandos útiles](#17-comandos-útiles)
-18. [Pendientes](#18-pendientes)
+16. [Panel de cuenta y `[Authorize]`](#16-panel-de-cuenta-y-authorize)
+17. [Autenticación en dos pasos (2FA)](#17-autenticación-en-dos-pasos-2fa)
+18. [Git y commits](#18-git-y-commits)
+19. [Comandos útiles](#19-comandos-útiles)
+20. [Pendientes](#20-pendientes)
 
 ---
 
@@ -1436,9 +1438,361 @@ ORDER BY u."Email";
 - ⚠️ Borrar por `Email` puede borrar **varios** usuarios, porque el email no es único por defecto. Más seguro por `Id`.
 - Para volver a ver la pantalla de permisos de Google: *myaccount.google.com → Seguridad → Conexiones con apps de terceros → IdentityLab → Eliminar*.
 
+### Qué se guarda de un usuario de Google
+
+| Tabla | ¿Se guarda? | Qué |
+|---|---|---|
+| `AspNetUsers` | ✅ | El usuario: username generado, email y nombre de Google, `EmailConfirmed = true` y **`PasswordHash = NULL`** |
+| `AspNetUserLogins` | ✅ | La vinculación (`Google`, `ProviderKey`, `UserId`) |
+| `AspNetUserTokens` | ❌ | Google envía tokens de acceso, pero la app **los descarta**. Solo se guardarían con `options.SaveTokens = true` y `UpdateExternalAuthenticationTokensAsync`, que hace falta para **usar las APIs de Google** en nombre del usuario (calendario, Drive…) |
+| `AspNetUserClaims` / `AspNetUserRoles` | ❌ | Los claims de Google se usan una vez para crear el usuario |
+| La contraseña de Google | ❌ **Nunca** | La app no la ve en ningún momento |
+
+### Registrarse con el formulario y luego entrar con Google (mismo email)
+
+```
+1. ExternalLoginSignInAsync → no hay fila en AspNetUserLogins → Failed
+2. FindByEmailAsync → ¡existe la cuenta del formulario!
+3. "An account with this email already exists. Log in with your password." → no crea nada
+```
+
+- **No se crean dos usuarios.** Hay dos protecciones: la comprobación del callback y `RequireUniqueEmail`.
+- **Tampoco se puede entrar con Google**, porque no se vincula automáticamente.
+- Las dos formas de permitirlo:
+
+| Opción | Cómo | Seguridad |
+|---|---|---|
+| **A. Vincular desde "Mi cuenta"** | Con la sesión iniciada, "Conectar con Google" | La más segura: el usuario ya demostró quién es |
+| **B. Vincular automáticamente si `EmailConfirmed = true`** | El riesgo venía de cuentas **sin confirmar**. Si la cuenta local confirmó el email, quien la creó controla ese correo, igual que Google | Compromiso entre comodidad y seguridad; muchas apps lo hacen |
+
 ---
 
-## 16. Git y commits
+## 16. Panel de cuenta y `[Authorize]`
+
+### `[Authorize]`
+
+Atributo que significa **"aquí solo entra quien haya iniciado sesión"**. Puesto sobre la **clase**, protege **todas** sus acciones (también las que se agreguen después).
+
+```csharp
+[Authorize]
+public class ManageController : Controller { ... }
+```
+
+```
+GET /Manage sin sesión
+→ UseAuthorization() ve [Authorize] y el usuario es anónimo
+→ 302 a /Account/Login?ReturnUrl=%2FManage     ← lo hace Identity solo
+→ tras iniciar sesión, el Login devuelve al usuario a /Manage
+```
+
+- **Aquí se ve funcionar el `returnUrl` sin escribirlo a mano**: todo lo que se construyó en el Login era para esto.
+- `UseAuthentication()` responde "¿quién eres?" y `UseAuthorization()` aplica el `[Authorize]`. Por eso van en ese orden.
+- La ruta del Login (`/Account/Login`) es la que usa `AddIdentity` por defecto.
+
+### Dos controladores
+
+| Controlador | Para quién | Qué contiene |
+|---|---|---|
+| `AccountController` | Usuarios **sin** sesión | Registro, login, confirmación, reset, login con Google y segundo paso del 2FA |
+| **`ManageController`** | Usuarios **con** sesión (`[Authorize]`) | Perfil, seguridad, 2FA, códigos de recuperación, eliminar la cuenta |
+
+### El usuario actual
+
+```csharp
+var user = await _userManager.GetUserAsync(User);
+if (user is null)
+{
+    // La cookie es válida, pero el usuario ya no existe (p. ej., se borró de la base).
+    await _signInManager.SignOutAsync();
+    return RedirectToAction("Login", "Account");
+}
+```
+
+- `User` es el `ClaimsPrincipal` de la cookie. `GetUserAsync` busca **su fila completa** en la base a partir del `Id` guardado en la cookie.
+
+| Método de `UserManager` | Qué devuelve |
+|---|---|
+| `GetUserAsync(User)` | La fila completa del usuario de la cookie |
+| `HasPasswordAsync(user)` | Si tiene contraseña |
+| `GetTwoFactorEnabledAsync(user)` | Si tiene el 2FA activado |
+| `CountRecoveryCodesAsync(user)` | Cuántos códigos de recuperación le quedan |
+| `GetLoginsAsync(user)` | Sus filas de `AspNetUserLogins` |
+
+### La página "My account" (`/Manage`)
+
+- **Encabezado**: inicial, nombre completo (o username) y `@username`.
+- **Profile**: nombre, username y email con la etiqueta *Verified* o *Not verified*.
+- **Security**: contraseña (*Set* / *Not set*), 2FA (*Set up* / *Disable*), códigos de recuperación (cuántos quedan y *Generate new*) y logins vinculados.
+- **Delete account**, en una tarjeta roja aparte.
+- Se usa un **ViewModel** (`ManageIndexViewModel`) y no `ApplicationUser`, para que la vista reciba **solo lo que muestra** y nunca el `PasswordHash` o el `SecurityStamp`.
+- En el `_Layout.cshtml`, el menú del usuario tiene el enlace **"My account"**.
+
+> En Razor, `@@` escribe una `@` literal: `@@@Model.UserName` muestra `@jcombita`.
+
+### `TempData`: mensajes que sobreviven a una redirección
+
+```csharp
+TempData["StatusMessage"] = "Two-factor authentication is now enabled.";
+return RedirectToAction("Index");
+```
+
+```cshtml
+@if (TempData["StatusMessage"] is string statusMessage)
+{
+    <div class="alert alert-success alert-dismissible fade show">@statusMessage ...</div>
+}
+```
+
+| | ¿Sobrevive a una redirección? |
+|---|---|
+| `ViewData` | ❌ Cada petición empieza de cero |
+| **`TempData`** | ✅ Se guarda (por defecto, en una cookie) **hasta que alguien lo lee**, y después se borra |
+
+Es ideal para Post-Redirect-Get: el `POST` deja el mensaje y la página siguiente lo muestra **una sola vez**. También sirve para pasar arrays de textos, como los códigos de recuperación.
+
+### Eliminar la cuenta
+
+```
+Panel → "Delete account" → página de confirmación
+  ├─ con contraseña   → hay que escribirla (CheckPasswordAsync)
+  └─ sin contraseña (Google) → hay que escribir el username
+→ DeleteAsync(user) → SignOutAsync() → Home
+```
+
+- **Pedir la contraseña** evita que alguien que encuentre la sesión abierta borre la cuenta.
+- **Se vuelve a comprobar en el servidor** si la cuenta tiene contraseña (`HasPasswordAsync`), sin fiarse del campo `RequirePassword` del formulario, que podría manipularse.
+- **`CheckPasswordAsync(user, password)`** verifica una contraseña **sin iniciar sesión** ni sumar fallos al bloqueo.
+- **`DeleteAsync`** + **borrado en cascada**: se van también sus logins, la clave del 2FA y los códigos de recuperación.
+
+### Depurar un login que no funciona
+
+Caso real: el email estaba confirmado y la contraseña "era la correcta", pero no se podía entrar.
+
+```sql
+SELECT "UserName", "Email", "EmailConfirmed", "PasswordHash" IS NOT NULL AS "TienePassword",
+       "LockoutEnd", "AccessFailedCount", "TwoFactorEnabled"
+FROM "AspNetUsers";
+```
+
+- **`AccessFailedCount` solo sube cuando el usuario se encuentra y la contraseña no coincide.** Con `4`, el usuario se encontraba bien y fallaba **la contraseña** (en este caso, había cambiado en las pruebas del reset).
+- ⚠️ Con **5 fallos** la cuenta se bloquea 5 minutos.
+- Identity escribe en la consola: `warn: Microsoft.AspNetCore.Identity.SignInManager ... User failed to provide the correct password.`
+- Si la app la ejecuta Rider, puede seguir corriendo **una versión vieja** del código: hay que detenerla y volver a ejecutarla.
+- Para desbloquear a mano:
+  ```sql
+  UPDATE "AspNetUsers" SET "AccessFailedCount" = 0, "LockoutEnd" = NULL WHERE "UserName" = '...';
+  ```
+
+---
+
+## 17. Autenticación en dos pasos (2FA)
+
+### La idea
+
+| Factor | Ejemplo | Si te lo roban… |
+|---|---|---|
+| Algo que **sabes** | La contraseña | …falta el otro factor |
+| Algo que **tienes** | El celular con la app | …falta la contraseña |
+
+### Cómo funcionan los códigos (TOTP)
+
+```
+ACTIVACIÓN (una vez): la app genera una CLAVE SECRETA → (QR) → el celular la guarda
+CADA LOGIN:  celular  → código = f(clave, hora) → 482 913
+             servidor → código = f(clave, hora) → 482 913   ¿Coinciden? ✅
+```
+
+- **TOTP** = *Time-based One-Time Password*. El código cambia **cada 30 segundos**.
+- **El celular y el servidor nunca se comunican**: cada uno lo calcula con la misma clave y la misma hora. Por eso importa que el reloj del celular esté bien.
+
+### ¿Cuándo se aplica?
+
+**Al iniciar sesión**, pero antes el usuario tiene que **activarlo**, y **no al registrarse**:
+
+```
+FASE 1: ACTIVARLO (una vez, con la sesión iniciada)
+  "My account" → "Set up" → escanear el QR → escribir un código → TwoFactorEnabled = true
+FASE 2: USARLO (en cada login)
+  contraseña ✅ → código de la app ✅ → sesión iniciada
+```
+
+- Al registrarse, el usuario aún no ha demostrado nada, y activarlo exige la sesión iniciada, porque la clave se asocia a **su** usuario.
+
+| Modelo | Cómo |
+|---|---|
+| **Opcional** (el implementado) | Cada usuario lo activa si quiere |
+| **Obligatorio** | Tras el primer login, se obliga a configurarlo antes de usar la app (bancos, paneles de administración) |
+
+- **`bypassTwoFactor: true`** en el callback de Google: al entrar con Google **no se pide el código**, porque Google ya aplica su propia seguridad.
+
+### Lo que Identity ya trae
+
+| Pieza | Dónde |
+|---|---|
+| Generador y verificador TOTP | `AddDefaultTokenProviders()` |
+| La clave secreta | `AspNetUserTokens` → `[AspNetUserStore]` / `AuthenticatorKey` |
+| Los códigos de recuperación | `AspNetUserTokens` → `[AspNetUserStore]` / `RecoveryCodes` |
+| `TwoFactorEnabled` | `AspNetUsers` |
+
+### Paso 1: la clave secreta y el QR (`GET /Manage/EnableAuthenticator`)
+
+```csharp
+var key = await _userManager.GetAuthenticatorKeyAsync(user);
+if (string.IsNullOrEmpty(key))
+{
+    await _userManager.ResetAuthenticatorKeyAsync(user);   // genera y guarda una clave nueva
+    key = await _userManager.GetAuthenticatorKeyAsync(user);
+}
+```
+
+- Si el usuario ya tiene clave, se **reutiliza**: recargar la página no la cambia.
+- `FormatKey` la muestra en grupos de 4 y en minúsculas (`jbsw y3dp ehpk 3pxp`), más fácil de escribir a mano.
+- `key!`: el `!` le dice al compilador "aquí no es `null`".
+
+**El QR** es solo **un texto con formato estándar** convertido en imagen:
+
+```
+otpauth://totp/IdentityLab:javier%40gmail.com?secret=JBSWY3DP...&issuer=IdentityLab&digits=6
+```
+
+| Parte | Significado |
+|---|---|
+| `otpauth://totp/` | "Cuenta TOTP para una app autenticadora" |
+| `IdentityLab:email` | El nombre que se ve en la app |
+| `secret=` | **La clave secreta** |
+| `issuer=` | Quién emite la cuenta |
+| `digits=6` | Códigos de 6 dígitos |
+
+```csharp
+using var generator = new QRCodeGenerator();
+using var data = generator.CreateQrCode(text, QRCodeGenerator.ECCLevel.Q);
+var png = new PngByteQRCode(data).GetGraphic(6);
+return $"data:image/png;base64,{Convert.ToBase64String(png)}";
+```
+
+- Paquete **QRCoder** (MIT). `PngByteQRCode` funciona igual en Windows, Linux y Docker.
+- **Data URI**: la imagen va **incrustada en el HTML** (`<img src="data:image/png;base64,...">`), sin guardar archivos.
+- `Uri.EscapeDataString` convierte la `@` del email en `%40`.
+- ⚠️ **Se genera en el servidor** para que **la clave nunca salga de la app**. Usar un servicio web de QR o una librería cargada desde internet significaría enviar la clave a un tercero.
+- La clave escrita sigue disponible como alternativa ("Can't scan it?"), plegada en un `<details>`.
+
+### Paso 2: verificar el primer código y activar (`POST /Manage/EnableAuthenticator`)
+
+```csharp
+var code = model.Code.Replace(" ", string.Empty).Replace("-", string.Empty);
+var isValid = await _userManager.VerifyTwoFactorTokenAsync(
+    user, _userManager.Options.Tokens.AuthenticatorTokenProvider, code);
+
+await _userManager.SetTwoFactorEnabledAsync(user, true);
+await _signInManager.RefreshSignInAsync(user);
+```
+
+- Se limpian espacios y guiones, porque algunas apps muestran `123 456`.
+- `VerifyTwoFactorTokenAsync` acepta también el código **anterior y el siguiente** a los 30 segundos actuales, por si el reloj está algo desfasado.
+- **Pedir un código antes de activarlo** confirma que la app quedó bien configurada. Si no, el usuario podría quedarse fuera.
+- ⚠️ **`RefreshSignInAsync`**: activar el 2FA **cambia el `SecurityStamp`**, y la cookie lleva el viejo. Sin renovarla, Identity detectaría la diferencia (cada ~30 minutos) y **cerraría la sesión**.
+- Si el código es incorrecto, hay que **volver a cargar la clave y el QR** (no se envían en el formulario).
+- `inputmode="numeric"` muestra el teclado numérico en el celular, y `autocomplete="one-time-code"` permite que el teclado sugiera el código.
+
+⚠️ **Lección:** al activar el 2FA **antes de que el Login supiera pedir el código**, cerrar sesión dejaba al usuario fuera (el Login caía en "Invalid login attempt"). Para salir del paso: `UPDATE "AspNetUsers" SET "TwoFactorEnabled" = false WHERE ...`.
+
+### Paso 3: el login en dos pasos
+
+```csharp
+// En POST Login:
+if (result.RequiresTwoFactor)
+{
+    return RedirectToAction("LoginWith2fa", new { returnUrl, rememberMe = model.RememberMe });
+}
+```
+
+```
+1. Contraseña ✅ → PasswordSignInAsync → RequiresTwoFactor
+   → NO crea la cookie de sesión: crea una cookie TEMPORAL (Identity.TwoFactorUserId)
+     que dice "este usuario ya pasó la contraseña"
+2. /Account/LoginWith2fa → código ✅
+3. TwoFactorAuthenticatorSignInAsync → cookie de sesión de verdad
+```
+
+| Método | Qué hace |
+|---|---|
+| `GetTwoFactorAuthenticationUserAsync()` | Lee la cookie temporal. `null` si no existe o caducó → volver al Login |
+| `TwoFactorAuthenticatorSignInAsync(code, rememberMe, rememberMachine)` | Verifica el código, **cuenta los fallos para el bloqueo** y crea la cookie de sesión |
+
+- Se pasan el `returnUrl` y el *Remember me* del primer paso para no perderlos.
+- Los códigos incorrectos **también suman al bloqueo**: así nadie puede probar el millón de códigos posibles.
+- `RequiresTwoFactor` solo aparece **después** de comprobar la contraseña.
+
+| Opción | Qué recuerda |
+|---|---|
+| **Remember me** (paso 1) | **La sesión**: no hay que volver a iniciar sesión al cerrar el navegador |
+| **Remember this device** (paso 2) | **El navegador**: no se vuelve a pedir el **código** en ese navegador. La contraseña sí |
+
+**Las cookies temporales de Identity:**
+
+| Cookie | Para qué |
+|---|---|
+| `Identity.External` | Datos devueltos por Google |
+| `Identity.TwoFactorUserId` | "Ya pasó la contraseña, falta el código" |
+| `Identity.TwoFactorRememberMe` | "Remember this device" |
+
+### Paso 4: los códigos de recuperación
+
+**10 códigos de un solo uso** (`XXXXX-XXXXX`) para entrar si se pierde el celular.
+
+| Método | Qué hace |
+|---|---|
+| `GenerateNewTwoFactorRecoveryCodesAsync(user, 10)` | Genera 10 y **reemplaza** los anteriores |
+| `CountRecoveryCodesAsync(user)` | Cuántos quedan |
+| `TwoFactorRecoveryCodeSignInAsync(code)` | Inicia sesión con uno **y lo elimina** |
+
+- Se generan **cada vez que se activa el 2FA**, para que los de una activación anterior dejen de valer.
+- Se muestran **una sola vez** (`ShowRecoveryCodes`), pasados por **`TempData`**: si se recarga la página, ya no aparecen.
+- El panel muestra cuántos quedan (en amarillo si son 3 o menos) y permite **regenerarlos** (con confirmación, porque invalida los anteriores).
+- En el login: *"Lost access to your authenticator app? Use a recovery code"* → `LoginWithRecoveryCode`, que usa **la misma cookie temporal** que el login con código.
+
+❌ **Error cometido:** llamar `code` a la variable del `foreach` en la vista. **`@code` es una palabra reservada de Razor** (una directiva para bloques de código). Solución: otro nombre (`@recoveryCode`). Otras palabras a evitar tras `@`: `functions`, `model`, `using`, `inject`, `inherits`, `section`, `page`, `layout`. Una etiqueta HTML `<code>` sin `@` no tiene problema.
+
+### Paso 5: desactivar el 2FA (`POST /Manage/Disable2fa`)
+
+```csharp
+await _userManager.SetTwoFactorEnabledAsync(user, false);
+await _userManager.ResetAuthenticatorKeyAsync(user);   // la entrada de la app deja de servir
+await _signInManager.ForgetTwoFactorClientAsync();      // olvida "Remember this device"
+await _signInManager.RefreshSignInAsync(user);          // el SecurityStamp cambió
+```
+
+- Con una **clave nueva**, volver a activarlo exige escanear un QR nuevo.
+- El botón pide confirmación (`onsubmit="return confirm(...)"`).
+
+### Páginas del 2FA
+
+| Página | Controlador | Para qué |
+|---|---|---|
+| `/Manage/EnableAuthenticator` | `ManageController` | QR, clave y primer código |
+| `/Manage/ShowRecoveryCodes` | `ManageController` | Ver los códigos una vez |
+| `POST /Manage/GenerateRecoveryCodes` | `ManageController` | Regenerarlos |
+| `POST /Manage/Disable2fa` | `ManageController` | Desactivarlo |
+| `/Account/LoginWith2fa` | `AccountController` | Segundo paso con la app |
+| `/Account/LoginWithRecoveryCode` | `AccountController` | Segundo paso con un código de recuperación |
+
+### Cómo probarlo
+
+| # | Prueba | Resultado esperado |
+|---|---|---|
+| 1 | "Set up" → escanear el QR → código correcto | 2FA activado y los 10 códigos en pantalla |
+| 2 | Recargar la página de los códigos | Vuelve al panel, sin códigos |
+| 3 | Cerrar sesión y entrar con contraseña | Pide el código |
+| 4 | Código de la app | ✅ Entra |
+| 5 | "Use a recovery code" con uno de los códigos | ✅ Entra, y el panel muestra uno menos |
+| 6 | Repetir el mismo código de recuperación | "invalid or has already been used" |
+| 7 | "Remember this device" y volver a entrar | Pide la contraseña, no el código |
+| 8 | Entrar con Google | Sin código (`bypassTwoFactor`) |
+| 9 | "Disable" | El login vuelve a pedir solo la contraseña |
+
+---
+
+## 18. Git y commits
 
 ### Conventional Commits
 
@@ -1483,10 +1837,17 @@ ORDER BY u."Email";
 17. `style: redesign login view and add Google sign-in button`
 18. `docs: add Google sign-in notes`
 19. `fix: allow login with email or username`
+20. `docs: add notes on ApplicationUser constructor, username and email-or-username login`
+21. `feat: add account page and authenticator key setup`
+22. `feat: add two-factor authentication with authenticator app`
+23. `feat: add 2FA recovery codes`
+24. `fix: rename recovery code loop variable that clashed with Razor @code directive`
+25. `feat: show a QR code to set up the authenticator app`
+26. `feat: allow disabling 2FA and deleting the account`
 
 ---
 
-## 17. Comandos útiles
+## 19. Comandos útiles
 
 ```bash
 # Paquetes
@@ -1515,7 +1876,7 @@ dotnet run --project src/IdentityLab.Mvc
 
 ---
 
-## 18. Pendientes
+## 20. Pendientes
 
 - [x] Corregir `GET Login` para que reciba `returnUrl` y lo guarde en `ViewData`.
 - [x] **Logout**: acción `POST` con `SignOutAsync()`.
@@ -1530,14 +1891,15 @@ dotnet run --project src/IdentityLab.Mvc
 - [ ] Ajustar las reglas de contraseña (`options.Password`).
 - [ ] ⚠️ **Crear y aplicar la migración de `[MaxLength(100)]` en `FullName`** (`AddFullNameMaxLength`). El atributo está en el código, pero la migración no existe: `dotnet ef migrations has-pending-model-changes` lo confirma.
 - [ ] `ConfigureApplicationCookie`, después de `AddIdentity`.
-- [ ] Proteger páginas con `[Authorize]`.
+- [x] Proteger páginas con `[Authorize]` (panel de cuenta).
 - [ ] Etapa 3: `IdentityLab.Api` con `AddIdentityCore` + JWT.
 - [x] **Login con Google**: `AddGoogle`, `ExternalLogin`, `ExternalLoginCallback` y botón en Login y Register.
 - [x] **Login con email o username** (`FindByEmailAsync` / `FindByNameAsync` + `PasswordSignInAsync(user, ...)`).
-- [ ] Vincular un proveedor externo a una cuenta existente desde "Mi cuenta" (con la sesión iniciada).
-- [ ] Permitir que el usuario cambie el username generado.
 - [ ] Manejar la cancelación en la pantalla de Google (hoy da error 500).
 - [ ] Resolver la vulnerabilidad de `System.Security.Cryptography.Pkcs` 10.0.0 (llega por MailKit → MimeKit).
-- [ ] 2FA con app autenticadora (en pausa).
+- [x] **2FA con app autenticadora**: activar con QR, login en dos pasos, códigos de recuperación y desactivar.
+- [x] Eliminar la cuenta desde el panel.
+- [ ] Vincular Google a una cuenta existente (opción A o B de la sección 15).
+- [ ] Cambiar la contraseña y el username desde el panel.
 - [x] Crear `.env` y `.env.example` en la raíz.
 - [ ] Dockerizar: `Dockerfile` y `docker-compose.yml` que lean el `.env`.
