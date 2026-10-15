@@ -59,6 +59,45 @@ public class ManageController : Controller
             return RedirectToAction("Login", "Account");
         }
 
+        return View(new EnableAuthenticatorViewModel { SharedKey = await GetOrCreateSharedKeyAsync(user) });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EnableAuthenticator(EnableAuthenticatorViewModel model)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+        {
+            return RedirectToAction("Login", "Account");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            model.SharedKey = await GetOrCreateSharedKeyAsync(user);
+            return View(model);
+        }
+
+        var code = model.Code.Replace(" ", string.Empty).Replace("-", string.Empty);
+        var isValid = await _userManager.VerifyTwoFactorTokenAsync(
+            user, _userManager.Options.Tokens.AuthenticatorTokenProvider, code);
+
+        if (!isValid)
+        {
+            ModelState.AddModelError(nameof(model.Code), "The verification code is invalid. Check that the time on your phone is correct and try again.");
+            model.SharedKey = await GetOrCreateSharedKeyAsync(user);
+            return View(model);
+        }
+
+        await _userManager.SetTwoFactorEnabledAsync(user, true);
+        await _signInManager.RefreshSignInAsync(user);
+
+        TempData["StatusMessage"] = "Two-factor authentication is now enabled.";
+        return RedirectToAction("Index");
+    }
+
+    private async Task<string> GetOrCreateSharedKeyAsync(ApplicationUser user)
+    {
         var key = await _userManager.GetAuthenticatorKeyAsync(user);
         if (string.IsNullOrEmpty(key))
         {
@@ -66,7 +105,7 @@ public class ManageController : Controller
             key = await _userManager.GetAuthenticatorKeyAsync(user);
         }
 
-        return View(new EnableAuthenticatorViewModel { SharedKey = FormatKey(key!) });
+        return FormatKey(key!);
     }
 
     private static string FormatKey(string key)

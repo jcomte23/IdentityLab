@@ -236,6 +236,11 @@ public class AccountController : Controller
             return RedirectToAction("Index", "Home");
         }
 
+        if (result.RequiresTwoFactor)
+        {
+            return RedirectToAction("LoginWith2fa", new { returnUrl, rememberMe = model.RememberMe });
+        }
+
         if (result.IsLockedOut)
         {
             ModelState.AddModelError(string.Empty, "This account is locked out. Please try again later.");
@@ -243,6 +248,64 @@ public class AccountController : Controller
         }
 
         ModelState.AddModelError(string.Empty, "Invalid login attempt. If you just registered, make sure you have confirmed your email.");
+        return View(model);
+    }
+
+    /*----------------------------------------------*/
+    /*Segundo paso del login: código de la app (2FA)*/
+    /*----------------------------------------------*/
+    [HttpGet]
+    public async Task<IActionResult> LoginWith2fa(bool rememberMe, string? returnUrl = null)
+    {
+        var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
+        if (user is null)
+        {
+            // The temporary two-factor cookie is missing or expired: start over.
+            return RedirectToAction("Login", new { returnUrl });
+        }
+
+        ViewData["ReturnUrl"] = returnUrl;
+        return View(new LoginWith2faViewModel { RememberMe = rememberMe });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> LoginWith2fa(LoginWith2faViewModel model, string? returnUrl = null)
+    {
+        ViewData["ReturnUrl"] = returnUrl;
+
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
+        if (user is null)
+        {
+            return RedirectToAction("Login", new { returnUrl });
+        }
+
+        var code = model.Code.Replace(" ", string.Empty).Replace("-", string.Empty);
+        var result = await _signInManager.TwoFactorAuthenticatorSignInAsync(
+            code, model.RememberMe, model.RememberMachine);
+
+        if (result.Succeeded)
+        {
+            if (Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+
+            return RedirectToAction("Index", "Home");
+        }
+
+        if (result.IsLockedOut)
+        {
+            ModelState.AddModelError(string.Empty, "This account is locked out. Please try again later.");
+            return View(model);
+        }
+
+        ModelState.AddModelError(nameof(model.Code), "The code is invalid. Check that the time on your phone is correct and try again.");
         return View(model);
     }
 
