@@ -106,6 +106,35 @@
                     }
                 </div>
 
+                @if (Model.TwoFactorEnabled)
+                {
+                    <div class="list-group-item d-flex justify-content-between align-items-center gap-3 py-3">
+                        <div>
+                            <div class="fw-medium">Recovery codes</div>
+                            <div class="small text-body-secondary">
+                                One-time codes to log in if you lose access to your authenticator app.
+                            </div>
+                            @if (Model.RecoveryCodesLeft <= 3)
+                            {
+                                <div class="small text-warning-emphasis mt-1">
+                                    @(Model.RecoveryCodesLeft == 0
+                                        ? "You have no recovery codes left. Generate new ones."
+                                        : "You're running low on recovery codes. Consider generating new ones.")
+                                </div>
+                            }
+                        </div>
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            <span class="badge rounded-pill @(Model.RecoveryCodesLeft <= 3 ? "bg-warning-subtle text-warning-emphasis" : "bg-success-subtle text-success-emphasis")">
+                                @Model.RecoveryCodesLeft left
+                            </span>
+                            <form asp-action="GenerateRecoveryCodes" method="post"
+                                  onsubmit="return confirm('Generating new codes will invalidate your current recovery codes. Continue?');">
+                                <button type="submit" class="btn btn-outline-secondary btn-sm">Generate new</button>
+                            </form>
+                        </div>
+                    </div>
+                }
+
                 <div class="list-group-item d-flex justify-content-between align-items-center gap-3 py-3">
                     <div>
                         <div class="fw-medium">Linked logins</div>

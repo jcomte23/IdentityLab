@@ -41,6 +41,7 @@ public class ManageController : Controller
             EmailConfirmed = user.EmailConfirmed,
             HasPassword = await _userManager.HasPasswordAsync(user),
             TwoFactorEnabled = await _userManager.GetTwoFactorEnabledAsync(user),
+            RecoveryCodesLeft = await _userManager.CountRecoveryCodesAsync(user),
             ExternalLogins = logins.Select(l => l.ProviderDisplayName ?? l.LoginProvider).ToList()
         };
 
@@ -93,7 +94,51 @@ public class ManageController : Controller
         await _signInManager.RefreshSignInAsync(user);
 
         TempData["StatusMessage"] = "Two-factor authentication is now enabled.";
+
+        if (await _userManager.CountRecoveryCodesAsync(user) == 0)
+        {
+            var recoveryCodes = await _userManager.GenerateNewTwoFactorRecoveryCodesAsync(user, 10);
+            TempData["RecoveryCodes"] = recoveryCodes?.ToArray();
+            return RedirectToAction("ShowRecoveryCodes");
+        }
+
         return RedirectToAction("Index");
+    }
+
+    /*-------------------------------*/
+    /*Códigos de recuperación del 2FA*/
+    /*-------------------------------*/
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> GenerateRecoveryCodes()
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+        {
+            return RedirectToAction("Login", "Account");
+        }
+
+        if (!await _userManager.GetTwoFactorEnabledAsync(user))
+        {
+            TempData["StatusMessage"] = "Enable two-factor authentication before generating recovery codes.";
+            return RedirectToAction("Index");
+        }
+
+        var recoveryCodes = await _userManager.GenerateNewTwoFactorRecoveryCodesAsync(user, 10);
+        TempData["RecoveryCodes"] = recoveryCodes?.ToArray();
+        return RedirectToAction("ShowRecoveryCodes");
+    }
+
+    [HttpGet]
+    public IActionResult ShowRecoveryCodes()
+    {
+        // The codes are only available right after generating them (TempData is read once).
+        if (TempData["RecoveryCodes"] is not string[] recoveryCodes || recoveryCodes.Length == 0)
+        {
+            return RedirectToAction("Index");
+        }
+
+        return View(recoveryCodes);
     }
 
     private async Task<string> GetOrCreateSharedKeyAsync(ApplicationUser user)

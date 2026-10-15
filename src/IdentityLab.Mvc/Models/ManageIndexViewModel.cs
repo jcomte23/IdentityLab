@@ -8,5 +8,6 @@ public class ManageIndexViewModel
     public bool EmailConfirmed { get; set; }
     public bool HasPassword { get; set; }
     public bool TwoFactorEnabled { get; set; }
+    public int RecoveryCodesLeft { get; set; }
     public IReadOnlyList<string> ExternalLogins { get; set; } = [];
 }

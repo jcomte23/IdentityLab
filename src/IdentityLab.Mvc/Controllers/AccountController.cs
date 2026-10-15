@@ -309,6 +309,62 @@ public class AccountController : Controller
         return View(model);
     }
 
+    /*----------------------------------------------------*/
+    /*Segundo paso del login: código de recuperación (2FA)*/
+    /*----------------------------------------------------*/
+    [HttpGet]
+    public async Task<IActionResult> LoginWithRecoveryCode(string? returnUrl = null)
+    {
+        var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
+        if (user is null)
+        {
+            return RedirectToAction("Login", new { returnUrl });
+        }
+
+        ViewData["ReturnUrl"] = returnUrl;
+        return View();
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> LoginWithRecoveryCode(LoginWithRecoveryCodeViewModel model, string? returnUrl = null)
+    {
+        ViewData["ReturnUrl"] = returnUrl;
+
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
+        if (user is null)
+        {
+            return RedirectToAction("Login", new { returnUrl });
+        }
+
+        var recoveryCode = model.RecoveryCode.Replace(" ", string.Empty);
+        var result = await _signInManager.TwoFactorRecoveryCodeSignInAsync(recoveryCode);
+
+        if (result.Succeeded)
+        {
+            if (Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+
+            return RedirectToAction("Index", "Home");
+        }
+
+        if (result.IsLockedOut)
+        {
+            ModelState.AddModelError(string.Empty, "This account is locked out. Please try again later.");
+            return View(model);
+        }
+
+        ModelState.AddModelError(nameof(model.RecoveryCode), "The recovery code is invalid or has already been used.");
+        return View(model);
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Logout()
